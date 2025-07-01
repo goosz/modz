@@ -29,3 +29,15 @@ jobs:
         run: go test -v ./...
       - name: Test with race detector
         run: go test -v -race ./...
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Generate coverage data
+        run: go test -v -coverprofile=coverage.txt ./...
+      - name: Upload coverage data
+        uses: codecov/codecov-action@v5
