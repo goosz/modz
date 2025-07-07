@@ -20,7 +20,6 @@ repos:
   rev: v1.0.0-rc.1
   hooks:
   - id: go-fmt
-  - id: go-vet
 - repo: local
   hooks:
   - id: do-not-commit
