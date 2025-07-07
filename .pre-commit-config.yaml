@@ -10,5 +10,22 @@ repos:
 - repo: https://github.com/pre-commit/pre-commit-hooks
   rev: v5.0.0
   hooks:
+  - id: check-added-large-files
+  - id: check-yaml
   - id: end-of-file-fixer
+  - id: forbid-submodules
+  - id: no-commit-to-branch
   - id: trailing-whitespace
+- repo: https://github.com/tekwizely/pre-commit-golang
+  rev: v1.0.0-rc.1
+  hooks:
+  - id: go-fmt
+  - id: go-vet
+- repo: local
+  hooks:
+  - id: do-not-commit
+    name: DO NOT COMMIT check
+    entry: DO NOT COMMIT|DO NOT SUBMIT
+    language: pygrep
+    types: [text]
+    exclude: ^\.pre-commit-config\.yaml$
