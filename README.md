@@ -15,3 +15,5 @@ Please check back later.
 
 [![Go Report Card](https://goreportcard.com/badge/github.com/goosz/modz)](https://goreportcard.com/report/github.com/goosz/modz)
 [![Go Reference](https://pkg.go.dev/badge/github.com/goosz/modz)](https://pkg.go.dev/github.com/goosz/modz)
+
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
