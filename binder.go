@@ -1,6 +1,49 @@
 package modz
 
+// Binder represents the controlled interface that modules use to interact with the
+// [Assembly] during the module's configuration phase.
+//
+// The [Assembly] creates a new Binder instance for each module. The Binder acts as a
+// facade over the [Assembly], enforcing the framework's access rules while allowing
+// modules to wire up their declared dependencies and store their produced values.
+//
+// The Binder interface is used by modules during their Configure() method calls. Modules
+// interact with data through the type-safe [Data][T] interface rather than directly with
+// the Binder.
+//
+// Binder instances should not be retained, shared, or used outside the scope in which
+// they are provided to the module. While Binder implementations may be thread-safe,
+// they are intended for single-threaded configuration use and should not be used from
+// goroutines.
 type Binder interface {
+	// Install adds a new module to the [Assembly] during the module's configuration phase.
+	//
+	// This method allows modules to dynamically install additional modules that may be
+	// needed based on their configuration or runtime requirements. The newly installed
+	// module will go through its own discovery and configuration phases.
+	//
+	// Returns an error if the module cannot be installed or if called outside of the
+	// module's configuration phase.
+	Install(Module) error
+
+	// getData retrieves a value stored under the specified DataKey.
+	//
+	// This method is used internally by the [Data].Get() method to access values from the
+	// Assembly's data. The value is returned as [any] and must be type-asserted by the
+	// calling code.
+	//
+	// Returns an error if the [DataKey] is not found, if called outside of the module's
+	// configuration phase, or if the calling module did not declare this key in its
+	// Consumes() method.
 	getData(DataKey) (any, error)
+
+	// putData stores a value under the specified DataKey.
+	//
+	// This method is used internally by the [Data].Put() method to store values in the
+	// Assembly's data. The value is stored as [any].
+	//
+	// Returns an error if the [DataKey] already has a value stored, if called outside of
+	// the module's configuration phase, or if the calling module did not declare this key
+	// in its Produces() method.
 	putData(DataKey, any) error
 }

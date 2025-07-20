@@ -13,6 +13,10 @@ func NewMockBinder() *MockBinder {
 	return &MockBinder{Store: make(map[DataKey]any)}
 }
 
+func (m *MockBinder) Install(module Module) error {
+	return errors.New("MockBinder.Install is not implemented")
+}
+
 func (m *MockBinder) getData(key DataKey) (any, error) {
 	val, ok := m.Store[key]
 	if !ok {
