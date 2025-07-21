@@ -1,5 +1,11 @@
 package modz
 
+import (
+	"fmt"
+
+	"github.com/goosz/commonz"
+)
+
 // Binder represents the controlled interface that modules use to interact with the
 // [Assembly] during the module's configuration phase.
 //
@@ -61,6 +67,72 @@ type binder struct {
 	parent          *binder
 
 	assembly *assembly
+
+	// produces and consumes are populated in the discovery phase.
+	produces map[DataKey]struct{}
+	consumes map[DataKey]struct{}
+
+	// produced tracks which DataKeys have been produced by this module during configuration.
+	produced map[DataKey]struct{}
+}
+
+// Ensure that *binder implements Binder.
+var _ Binder = (*binder)(nil)
+
+func (b *binder) Install(m Module) error {
+	return b.assembly.install(m, b)
+}
+
+func (b *binder) getData(key DataKey) (any, error) {
+	if _, ok := b.consumes[key]; !ok {
+		return nil, fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature)
+	}
+	return b.assembly.getData(key)
+}
+
+func (b *binder) putData(key DataKey, value any) error {
+	if _, ok := b.produces[key]; !ok {
+		return fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature)
+	}
+	err := b.assembly.putData(key, value)
+	if err == nil {
+		b.produced[key] = struct{}{}
+	}
+	return err
+}
+
+// discoverModule performs the module discovery phase, populating produces and consumes.
+func (b *binder) discoverModule() error {
+	produces, err := commonz.SliceToSet(b.module.Produces(), true)
+	if err != nil {
+		return fmt.Errorf("failed to convert produces to set: %w", err)
+	}
+	consumes, err := commonz.SliceToSet(b.module.Consumes(), true)
+	if err != nil {
+		return fmt.Errorf("failed to convert consumes to set: %w", err)
+	}
+	b.produces = produces
+	b.consumes = consumes
+	return nil
+}
+
+// configureModule calls the module's Configure method with this binder and checks all declared produces keys were produced.
+func (b *binder) configureModule() error {
+	err := b.module.Configure(b)
+	if err != nil {
+		return err
+	}
+	// Check that all declared produces keys were actually produced
+	var missing []DataKey
+	for k := range b.produces {
+		if _, ok := b.produced[k]; !ok {
+			missing = append(missing, k)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("module %s did not produce all declared keys: %v", b.moduleSignature, missing)
+	}
+	return nil
 }
 
 // newBinder creates a new binder instance for the given module and signature, with an optional parent binder.
@@ -71,5 +143,8 @@ func newBinder(a *assembly, m Module, parent *binder, sig moduleSignature) *bind
 		module:          m,
 		parent:          parent,
 		assembly:        a,
+		produces:        make(map[DataKey]struct{}),
+		consumes:        make(map[DataKey]struct{}),
+		produced:        make(map[DataKey]struct{}),
 	}
 }

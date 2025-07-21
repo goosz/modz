@@ -6,9 +6,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Package-level Data key for tests
-var fooKey = NewData[int]("foo")
-
 func TestNewAssembly(t *testing.T) {
 	m1 := &MockModule{NameValue: "m1"}
 	m2 := &MockModule{NameValue: "m2"}
@@ -55,11 +52,11 @@ func TestAssembly_putData_getData(t *testing.T) {
 	internal := asm.(*assembly)
 
 	// putData: store a value
-	err := internal.putData(fooKey, 123)
+	err := internal.putData(FooKey, 123)
 	require.NoError(t, err)
 
 	// getData: retrieve the value
-	val, err := internal.getData(fooKey)
+	val, err := internal.getData(FooKey)
 	require.NoError(t, err)
 	require.Equal(t, 123, val)
 }
@@ -76,15 +73,15 @@ func TestAssembly_putData_DuplicateKey(t *testing.T) {
 	internal := asm.(*assembly)
 
 	// First putData: should succeed
-	err := internal.putData(fooKey, 1)
+	err := internal.putData(FooKey, 1)
 	require.NoError(t, err)
 
 	// Second putData: should fail (duplicate key)
-	err = internal.putData(fooKey, 2)
+	err = internal.putData(FooKey, 2)
 	require.Error(t, err)
 
 	// getData: should return the original value (1)
-	val, err := internal.getData(fooKey)
+	val, err := internal.getData(FooKey)
 	require.NoError(t, err)
 	require.Equal(t, 1, val)
 }
@@ -99,6 +96,6 @@ func TestAssembly_getData_NilKey(t *testing.T) {
 func TestAssembly_getData_MissingKey(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
-	_, err := internal.getData(fooKey)
+	_, err := internal.getData(FooKey)
 	require.Error(t, err)
 }
