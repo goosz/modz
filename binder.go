@@ -47,3 +47,29 @@ type Binder interface {
 	// in its Produces() method.
 	putData(DataKey, any) error
 }
+
+// TODO: Implement the Binder interface for binder.
+
+// binder is the internal implementation used by [Assembly] to manage a module's lifecycle.
+// It encapsulates the state and context for a single module, including its signature, parent binder (if any),
+// and a reference to the owning assembly.
+//
+// Modules interact with the [Binder] interface, not this type directly.
+type binder struct {
+	moduleSignature moduleSignature
+	module          Module
+	parent          *binder
+
+	assembly *assembly
+}
+
+// newBinder creates a new binder instance for the given module and signature, with an optional parent binder.
+// This function is used internally by the [Assembly] to set up the configuration context for a module.
+func newBinder(a *assembly, m Module, parent *binder, sig moduleSignature) *binder {
+	return &binder{
+		moduleSignature: sig,
+		module:          m,
+		parent:          parent,
+		assembly:        a,
+	}
+}

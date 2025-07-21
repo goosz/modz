@@ -65,3 +65,23 @@ type Module interface {
 	// process.
 	Configure(Binder) error
 }
+
+// moduleSignature uniquely identifies a Module within an Assembly.
+//
+// It is used as a key in internal maps to track module bindings and ensure uniqueness.
+// The current implementation derives the signature from the Module's Name() method,
+// but this detail may evolve as the framework matures.
+type moduleSignature struct {
+	name string
+}
+
+func (sig moduleSignature) String() string {
+	return sig.name
+}
+
+// newModuleSignature creates a new moduleSignature for the given Module.
+func newModuleSignature(m Module) moduleSignature {
+	return moduleSignature{
+		name: m.Name(),
+	}
+}
