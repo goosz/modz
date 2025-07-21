@@ -20,6 +20,13 @@ func TestNewAssembly(t *testing.T) {
 	require.Len(t, internal.bindings, 2, "should have two module bindings")
 }
 
+func TestNewAssembly_Duplicate(t *testing.T) {
+	m1 := &MockModule{NameValue: "m1"}
+	asm, err := NewAssembly(m1, m1)
+	require.Error(t, err)
+	require.Nil(t, asm)
+}
+
 func TestAssembly_install(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
