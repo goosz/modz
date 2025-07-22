@@ -146,6 +146,8 @@ func TestBinder_discoverModule(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, b.produces, ProducedKey)
 	require.Contains(t, b.consumes, ConsumedKey)
+
+	require.False(t, b.isReady())
 }
 
 func TestBinder_discoverModuleWithNilKeys(t *testing.T) {
@@ -158,6 +160,8 @@ func TestBinder_discoverModuleWithNilKeys(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, b.produces)
 	require.Empty(t, b.consumes)
+
+	require.True(t, b.isReady())
 }
 
 func TestBinder_discoverModuleWithDuplicateProduces(t *testing.T) {
@@ -180,6 +184,20 @@ func TestBinder_discoverModuleWithDuplicateConsumes(t *testing.T) {
 
 	err := b.discoverModule()
 	require.Error(t, err)
+}
+
+func TestBinder_resolveDependency(t *testing.T) {
+	mod := &MockModule{
+		NameValue:     "mock",
+		ConsumesValue: Keys(ConsumedKey),
+	}
+	b := newBinder(nil, mod, nil, newModuleSignature(mod))
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	require.False(t, b.isReady())
+	require.True(t, b.resolveDependency(ConsumedKey))
+	require.True(t, b.isReady())
 }
 
 func TestBinder_configureModule(t *testing.T) {

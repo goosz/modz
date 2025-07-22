@@ -34,14 +34,32 @@ type Assembly interface {
 type assembly struct {
 	bindings map[moduleSignature]*binder
 	data     map[DataKey]any
+	waiters  map[DataKey][]*binder
+	ready    binderQueue
 }
 
 // Ensure that *assembly implements Assembly.
 var _ Assembly = (*assembly)(nil)
 
 func (a *assembly) Build() error {
-	// TODO: Implement the full build process for the assembly.
-	return fmt.Errorf("assembly.Build is not implemented yet")
+	for {
+		b := a.ready.Pop()
+		if b == nil {
+			break
+		}
+		if err := b.configureModule(); err != nil {
+			return err
+		}
+	}
+	if len(a.waiters) > 0 {
+		// Collect missing keys for error message
+		var missingKeys []string
+		for k := range a.waiters {
+			missingKeys = append(missingKeys, fmt.Sprintf("%v", k))
+		}
+		return fmt.Errorf("build incomplete: some modules are still waiting for data keys: %v", missingKeys)
+	}
+	return nil
 }
 
 func (*assembly) sealAssembly() {}
@@ -56,6 +74,19 @@ func (a *assembly) install(m Module, parent *binder) error {
 		return fmt.Errorf("module %q already added", sig)
 	}
 	b := newBinder(a, m, parent, sig)
+	if err := b.discoverModule(); err != nil {
+		return err
+	}
+	for k := range b.consumes {
+		if _, present := a.data[k]; !present {
+			a.waiters[k] = append(a.waiters[k], b)
+		} else {
+			b.resolveDependency(k)
+		}
+	}
+	if b.isReady() {
+		a.ready.Push(b)
+	}
 	a.bindings[sig] = b
 	return nil
 }
@@ -79,6 +110,16 @@ func (a *assembly) putData(key DataKey, value any) error {
 		return fmt.Errorf("data key already set")
 	}
 	a.data[key] = value
+
+	waiters := a.waiters[key]
+	if len(waiters) > 0 {
+		for _, b := range waiters {
+			if b.resolveDependency(key) {
+				a.ready.Push(b)
+			}
+		}
+		delete(a.waiters, key)
+	}
 	return nil
 }
 
@@ -95,6 +136,8 @@ func NewAssembly(modules ...Module) (Assembly, error) {
 	asm := &assembly{
 		bindings: make(map[moduleSignature]*binder),
 		data:     make(map[DataKey]any),
+		waiters:  make(map[DataKey][]*binder),
+		ready:    make(binderQueue, 0),
 	}
 	for _, m := range modules {
 		if err := asm.install(m, nil); err != nil {
@@ -102,4 +145,22 @@ func NewAssembly(modules ...Module) (Assembly, error) {
 		}
 	}
 	return asm, nil
+}
+
+// binderQueue is a FIFO queue of *binder.
+type binderQueue []*binder
+
+// Push appends a binder to the end of the queue.
+func (q *binderQueue) Push(b *binder) {
+	*q = append(*q, b)
+}
+
+// Pop removes and returns the first binder from the queue, or nil if empty.
+func (q *binderQueue) Pop() *binder {
+	if len(*q) == 0 {
+		return nil
+	}
+	b := (*q)[0]
+	*q = (*q)[1:]
+	return b
 }
