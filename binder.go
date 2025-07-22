@@ -72,6 +72,9 @@ type binder struct {
 	produces map[DataKey]struct{}
 	consumes map[DataKey]struct{}
 
+	// waiting contains DataKeys waiting to be satisfied before this module's configuration can begin.
+	waiting map[DataKey]struct{}
+
 	// produced tracks which DataKeys have been produced by this module during configuration.
 	produced map[DataKey]struct{}
 }
@@ -113,7 +116,22 @@ func (b *binder) discoverModule() error {
 	}
 	b.produces = produces
 	b.consumes = consumes
+	// initialize waiting as a copy of consumes
+	for k := range consumes {
+		b.waiting[k] = struct{}{}
+	}
 	return nil
+}
+
+// isReady reports whether all dependencies for this module have been satisfied and it is ready to be configured.
+func (b *binder) isReady() bool {
+	return len(b.waiting) == 0
+}
+
+// resolveDependency marks the given DataKey as satisfied and returns true if all dependencies are now satisfied.
+func (b *binder) resolveDependency(k DataKey) bool {
+	delete(b.waiting, k)
+	return len(b.waiting) == 0
 }
 
 // configureModule calls the module's Configure method with this binder and checks all declared produces keys were produced.
@@ -145,6 +163,7 @@ func newBinder(a *assembly, m Module, parent *binder, sig moduleSignature) *bind
 		assembly:        a,
 		produces:        make(map[DataKey]struct{}),
 		consumes:        make(map[DataKey]struct{}),
+		waiting:         make(map[DataKey]struct{}),
 		produced:        make(map[DataKey]struct{}),
 	}
 }

@@ -4,6 +4,7 @@ var (
 	ProducedKey = NewData[string]("produced")
 	ConsumedKey = NewData[int]("consumed")
 	FooKey      = NewData[int]("foo")
+	BarKey      = NewData[int]("bar")
 )
 
 // MockModule is a minimal implementation of Module for unit tests.
