@@ -105,6 +105,19 @@ func TestAssembly_Build_ConfigureError(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestAssembly_Build_Twice(t *testing.T) {
+	m := &MockModule{NameValue: "m"}
+	asm, err := NewAssembly(m)
+	require.NoError(t, err)
+	require.NotNil(t, asm)
+
+	err = asm.Build()
+	require.NoError(t, err)
+
+	err = asm.Build()
+	require.Error(t, err, "second call to Build should return an error")
+}
+
 func TestAssembly_install(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)

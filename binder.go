@@ -3,6 +3,8 @@ package modz
 import (
 	"fmt"
 
+	"sync/atomic"
+
 	"github.com/goosz/commonz"
 )
 
@@ -21,6 +23,12 @@ import (
 // they are provided to the module. While Binder implementations may be thread-safe,
 // they are intended for single-threaded configuration use and should not be used from
 // goroutines.
+//
+// The framework strictly enforces that Install, getData, and putData may only be called
+// during the configuration phase (i.e., while the module's Configure method is running).
+// If these methods are called outside of this phase, they will return an error.
+//
+// Additionally, configureModule can only be called once per binder; subsequent calls will return an error.
 type Binder interface {
 	// Install adds a new module to the [Assembly] during the module's configuration phase.
 	//
@@ -29,7 +37,7 @@ type Binder interface {
 	// module will go through its own discovery and configuration phases.
 	//
 	// Returns an error if the module cannot be installed or if called outside of the
-	// module's configuration phase.
+	// module's configuration phase (strictly enforced).
 	Install(Module) error
 
 	// getData retrieves a value stored under the specified DataKey.
@@ -40,7 +48,7 @@ type Binder interface {
 	//
 	// Returns an error if the [DataKey] is not found, if called outside of the module's
 	// configuration phase, or if the calling module did not declare this key in its
-	// Consumes() method.
+	// Consumes() method. This phase restriction is strictly enforced.
 	getData(DataKey) (any, error)
 
 	// putData stores a value under the specified DataKey.
@@ -50,7 +58,7 @@ type Binder interface {
 	//
 	// Returns an error if the [DataKey] already has a value stored, if called outside of
 	// the module's configuration phase, or if the calling module did not declare this key
-	// in its Produces() method.
+	// in its Produces() method. This phase restriction is strictly enforced.
 	putData(DataKey, any) error
 }
 
@@ -59,6 +67,10 @@ type Binder interface {
 // and a reference to the owning assembly.
 //
 // Modules interact with the [Binder] interface, not this type directly.
+//
+// The binder enforces once-only semantics for configureModule (it can only be called once per binder),
+// and strictly enforces that Install, getData, and putData may only be called during the configuration phase.
+// Errors are returned if these rules are violated.
 type binder struct {
 	moduleSignature moduleSignature
 	module          Module
@@ -75,16 +87,27 @@ type binder struct {
 
 	// produced tracks which DataKeys have been produced by this module during configuration.
 	produced map[DataKey]struct{}
+
+	// inProgress is true while configureModule is running.
+	inProgress atomic.Bool
+	// configured is true after configureModule has run once.
+	configured atomic.Bool
 }
 
 // Ensure that *binder implements Binder.
 var _ Binder = (*binder)(nil)
 
 func (b *binder) Install(m Module) error {
+	if !b.inProgress.Load() {
+		return fmt.Errorf("Install can only be called during module configuration phase for module %q", b.moduleSignature)
+	}
 	return b.assembly.install(m, b)
 }
 
 func (b *binder) getData(key DataKey) (any, error) {
+	if !b.inProgress.Load() {
+		return nil, fmt.Errorf("getData can only be called during module configuration phase for module %q", b.moduleSignature)
+	}
 	if _, ok := b.consumes[key]; !ok {
 		return nil, fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature)
 	}
@@ -92,6 +115,9 @@ func (b *binder) getData(key DataKey) (any, error) {
 }
 
 func (b *binder) putData(key DataKey, value any) error {
+	if !b.inProgress.Load() {
+		return fmt.Errorf("putData can only be called during module configuration phase for module %q", b.moduleSignature)
+	}
 	if _, ok := b.produces[key]; !ok {
 		return fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature)
 	}
@@ -133,8 +159,14 @@ func (b *binder) resolveDependency(k DataKey) bool {
 }
 
 // configureModule calls the module's Configure method with this binder and checks all declared produces keys were produced.
+// It can only be called once; subsequent calls return an error.
 func (b *binder) configureModule() error {
+	if !b.configured.CompareAndSwap(false, true) {
+		return fmt.Errorf("configureModule can only be called once for module %q", b.moduleSignature)
+	}
+	b.inProgress.Store(true)
 	err := b.module.Configure(b)
+	b.inProgress.Store(false)
 	if err != nil {
 		return err
 	}

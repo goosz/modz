@@ -34,6 +34,17 @@ func TestBinder_Install(t *testing.T) {
 	require.Len(t, asm.bindings, 2, "should have two module bindings")
 }
 
+func TestBinder_Install_outsideConfigPhase(t *testing.T) {
+	mod := &MockModule{NameValue: "mod"}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	// Install should fail outside of configuration phase
+	err = b.Install(&MockModule{NameValue: "other"})
+	require.Error(t, err)
+}
+
 func TestBinder_getData(t *testing.T) {
 	mod := &MockModule{
 		NameValue:     "mod",
@@ -58,6 +69,22 @@ func TestBinder_getData(t *testing.T) {
 	// this will call getData() via mod.ConfigureFunc above.
 	err = b.configureModule()
 	require.NoError(t, err)
+}
+
+func TestBinder_getData_outsideConfigPhase(t *testing.T) {
+	mod := &MockModule{
+		NameValue:     "mod",
+		ConsumesValue: Keys(ConsumedKey),
+	}
+	b, asm := newBinderTestFixture(mod)
+	err := asm.putData(ConsumedKey, 42)
+	require.NoError(t, err)
+	err = b.discoverModule()
+	require.NoError(t, err)
+
+	// getData should fail outside of configuration phase
+	_, err = b.getData(ConsumedKey)
+	require.Error(t, err)
 }
 
 func TestBinder_getData_undeclaredKey(t *testing.T) {
@@ -108,6 +135,20 @@ func TestBinder_putData(t *testing.T) {
 	val, err := asm.getData(ProducedKey)
 	require.NoError(t, err)
 	require.Equal(t, "produced", val)
+}
+
+func TestBinder_putData_outsideConfigPhase(t *testing.T) {
+	mod := &MockModule{
+		NameValue:     "mod",
+		ProducesValue: Keys(ProducedKey),
+	}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	// putData should fail outside of configuration phase
+	err = b.putData(ProducedKey, "value")
+	require.Error(t, err)
 }
 
 func TestBinder_putData_undeclaredKey(t *testing.T) {
@@ -250,4 +291,22 @@ func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
 	// this will call mod.ConfigureFunc above.
 	err = b.configureModule()
 	require.Error(t, err)
+}
+
+func TestBinder_configureModule_twice(t *testing.T) {
+	mod := &MockModule{
+		NameValue: "mod",
+		ConfigureFunc: func(binder Binder) error {
+			return nil
+		},
+	}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	err = b.configureModule()
+	require.NoError(t, err)
+
+	err = b.configureModule()
+	require.Error(t, err, "second call to configureModule should return an error")
 }
