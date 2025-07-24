@@ -18,7 +18,7 @@ package modz
 // While modules may have dynamic behavior based on their construction parameters,
 // these three methods must be consistent across multiple calls.
 //
-// Additionally, the Configure() method must only interact with [DataKey]s that were
+// Additionally, the Configure() method must only interact with [DataKey] values that were
 // declared in Produces() and Consumes(). A module cannot Put() to a [DataKey] it
 // did not declare in Produces(), nor Get() from a [DataKey] it did not declare in
 // Consumes(). This ensures consistency between the module's discovery and configuration phases.

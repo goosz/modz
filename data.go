@@ -9,11 +9,16 @@ import (
 
 // Data represents a type-safe key for dependency injection within a Modz application.
 //
-// Each Data instance acts as a contract for a value of type T that can be produced by one module
-// and consumed by others. During the Discovery Phase, modules declare their dependencies using
-// Data keys via Produces() and Consumes() methods. During the Configuration Phase, the Assembly
-// provides modules with access to dependencies through the Binder, allowing modules to wire up
-// their required values using Get() and Put() methods on their declared Data keys.
+// Each Data instance acts as both a key (for storing/retrieving values) and a contract
+// (defining the type and purpose) for a value of type T that can be produced by one module
+// and consumed by others.
+//
+// During the module's discovery phase, modules declare their dependencies using Data keys via
+// Produces() and Consumes() methods.
+//
+// During the module's configuration phase, the Assembly provides modules with access to dependencies
+// through the Binder, allowing modules to wire up their required values using Get() and
+// Put() methods on their declared Data keys.
 //
 // Data keys are intended to be used by application and module authors, not implemented directly.
 // Always use [NewData] to create new Data keys.

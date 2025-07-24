@@ -54,8 +54,6 @@ type Binder interface {
 	putData(DataKey, any) error
 }
 
-// TODO: Implement the Binder interface for binder.
-
 // binder is the internal implementation used by [Assembly] to manage a module's lifecycle.
 // It encapsulates the state and context for a single module, including its signature, parent binder (if any),
 // and a reference to the owning assembly.
