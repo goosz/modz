@@ -2,7 +2,7 @@ package modz
 
 import "fmt"
 
-// Assembly represents a specific composition of [Module]s, defining how they are
+// Assembly represents a specific composition of [Module], defining how each is
 // combined to form a complete application or subsystem.
 //
 // An Assembly is responsible for orchestrating the construction of the dependency graph
