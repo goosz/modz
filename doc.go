@@ -19,13 +19,17 @@
 //  1. The module's discovery phase: The [Assembly] inspects each [Module] to determine what [Data]
 //     it produces and consumes, building the dependency graph.
 //  2. The module's configuration phase: The [Assembly] provides each [Module] with a [Binder] to wire
-//     up its dependencies and store produced values.
+//     up its dependencies and store produced values. The [Binder]'s methods Install, getData, and putData
+//     are only valid during this configuration phase; calling them outside this phase is strictly enforced
+//     and will result in an error.
 //
 // # Assembly Lifecycle
 //
 // The [Assembly] is responsible for orchestrating the module lifecycle. It first builds the
 // dependency graph by inspecting all [Module]s, then configures each [Module] in dependency order.
 // The [Assembly] itself does not manage application runtime; it focuses on construction and wiring.
+//
+// The Build() method of [Assembly] can only be called once per Assembly instance; subsequent calls will return an error.
 //
 // # Intended Usage
 //

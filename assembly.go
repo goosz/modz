@@ -1,6 +1,10 @@
 package modz
 
-import "fmt"
+import (
+	"fmt"
+	"sync"
+	"sync/atomic"
+)
 
 // Assembly represents a specific composition of [Module], defining how each is
 // combined to form a complete application or subsystem.
@@ -12,6 +16,8 @@ import "fmt"
 // The Assembly manages each [Module]'s lifecycle to build the complete application.
 // The Build() method initiates this process by orchestrating each module's
 // lifecycle phases to prepare the application for runtime use.
+//
+// Build can only be called once per Assembly instance; subsequent calls will return an error.
 //
 // This design keeps the framework focused on construction and wiring, leaving the
 // application's runtime behavior and lifecycle management in the hands of the user.
@@ -25,25 +31,37 @@ type Assembly interface {
 	// missing required [Data], or module configuration errors. On success,
 	// the Assembly has completed the construction and wiring phases and
 	// is ready for runtime use.
+	//
+	// Build can only be called once per Assembly instance; subsequent calls will return an error.
 	Build() error
 
 	// sealAssembly is an unexported marker method used to seal the interface.
 	sealAssembly()
 }
 
+// assembly is the internal implementation of Assembly.
+//
+// The built field tracks whether Build has already been called, enforcing once-only semantics.
 type assembly struct {
+	mu       sync.RWMutex // protects all fields below except built
 	bindings map[moduleSignature]*binder
 	data     map[DataKey]any
 	waiters  map[DataKey][]*binder
 	ready    binderQueue
+	built    atomic.Bool // true after Build has been called
 }
 
 // Ensure that *assembly implements Assembly.
 var _ Assembly = (*assembly)(nil)
 
 func (a *assembly) Build() error {
+	if !a.built.CompareAndSwap(false, true) {
+		return fmt.Errorf("Build can only be called once on this Assembly")
+	}
 	for {
+		a.mu.Lock()
 		b := a.ready.Pop()
+		a.mu.Unlock()
 		if b == nil {
 			break
 		}
@@ -51,6 +69,8 @@ func (a *assembly) Build() error {
 			return err
 		}
 	}
+	a.mu.RLock()
+	defer a.mu.RUnlock()
 	if len(a.waiters) > 0 {
 		// Collect missing keys for error message
 		var missingKeys []string
@@ -70,6 +90,8 @@ func (a *assembly) install(m Module, parent *binder) error {
 		return fmt.Errorf("cannot add nil module")
 	}
 	sig := newModuleSignature(m)
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if _, exists := a.bindings[sig]; exists {
 		return fmt.Errorf("module %q already added", sig)
 	}
@@ -95,7 +117,9 @@ func (a *assembly) getData(key DataKey) (any, error) {
 	if key == nil {
 		return nil, fmt.Errorf("data key is nil")
 	}
+	a.mu.RLock()
 	val, ok := a.data[key]
+	a.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("no value for data key")
 	}
@@ -106,6 +130,8 @@ func (a *assembly) putData(key DataKey, value any) error {
 	if key == nil {
 		return fmt.Errorf("data key is nil")
 	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	if _, exists := a.data[key]; exists {
 		return fmt.Errorf("data key already set")
 	}
@@ -134,6 +160,7 @@ func (a *assembly) putData(key DataKey, value any) error {
 // an [Assembly] ready for the Build() process.
 func NewAssembly(modules ...Module) (Assembly, error) {
 	asm := &assembly{
+		mu:       sync.RWMutex{},
 		bindings: make(map[moduleSignature]*binder),
 		data:     make(map[DataKey]any),
 		waiters:  make(map[DataKey][]*binder),
