@@ -30,7 +30,10 @@
 // dependency graph by inspecting all [Module]s, then configures each [Module] in dependency order.
 // The [Assembly] itself does not manage application runtime; it focuses on construction and wiring.
 //
-// The Build() method of [Assembly] can only be called once per Assembly instance; subsequent calls will return an error.
+// The Build() method of [Assembly] can only be called once per Assembly instance; subsequent calls
+// will return an error. After Build() completes successfully, the [Assembly] can be used as a
+// [DataReader] to access the data values produced by modules. Data access is only available after
+// successful build completion.
 //
 // # Intended Usage
 //

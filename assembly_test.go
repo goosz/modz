@@ -230,3 +230,83 @@ func TestAssembly_getDataValue_MissingKey(t *testing.T) {
 	_, err := internal.getDataValue(FooKey)
 	require.Error(t, err)
 }
+
+func TestAssembly_getData_BeforeBuild(t *testing.T) {
+	asm, _ := NewAssembly()
+	_, err := asm.getData(FooKey)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+}
+
+func TestAssembly_getData_AfterBuild(t *testing.T) {
+	// Create a module that produces FooKey
+	m1 := &MockModule{
+		NameValue:     "m1",
+		ProducesValue: Keys(FooKey),
+		ConfigureFunc: func(b Binder) error {
+			return b.putData(FooKey, 42)
+		},
+	}
+	asm, err := NewAssembly(m1)
+	require.NoError(t, err)
+
+	// Before Build, getData should fail
+	_, err = asm.getData(FooKey)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+
+	// Build the assembly
+	err = asm.Build()
+	require.NoError(t, err)
+
+	// After Build, getData should succeed
+	val, err := asm.getData(FooKey)
+	require.NoError(t, err)
+	require.Equal(t, 42, val)
+}
+
+func TestAssembly_getData_AfterBuildFailure(t *testing.T) {
+	// Create a module that consumes a non-existent key
+	m1 := &MockModule{
+		NameValue:     "m1",
+		ConsumesValue: Keys(FooKey), // No module produces this
+	}
+	asm, err := NewAssembly(m1)
+	require.NoError(t, err)
+
+	// Build should fail
+	err = asm.Build()
+	require.Error(t, err)
+
+	// Even after Build failure, getData should still fail (not succeed)
+	_, err = asm.getData(FooKey)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+}
+
+func TestAssembly_DataGet_AfterBuild(t *testing.T) {
+	// Create a module that produces FooKey
+	m1 := &MockModule{
+		NameValue:     "m1",
+		ProducesValue: Keys(FooKey),
+		ConfigureFunc: func(b Binder) error {
+			return b.putData(FooKey, 42)
+		},
+	}
+	asm, err := NewAssembly(m1)
+	require.NoError(t, err)
+
+	// Before Build, Data.Get should fail
+	_, err = FooKey.Get(asm)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+
+	// Build the assembly
+	err = asm.Build()
+	require.NoError(t, err)
+
+	// After Build, Data.Get should succeed
+	val, err := FooKey.Get(asm)
+	require.NoError(t, err)
+	require.Equal(t, 42, val)
+}

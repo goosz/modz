@@ -24,9 +24,9 @@ import (
 // they are intended for single-threaded configuration use and should not be used from
 // goroutines.
 //
-// The framework strictly enforces that Install and the data access methods (getData and putData) may only be called during the
-// configuration phase (i.e., while the module's Configure method is running). If these methods
-// are called outside of this phase, they will return an error.
+// The framework strictly enforces that Install and the data access methods (getData and putData)
+// may only be called during the configuration phase (i.e., while the module's Configure method is running).
+// If these methods are called outside of this phase, they will return an error.
 //
 // Additionally, configureModule can only be called once per binder; subsequent calls will return an error.
 type Binder interface {
