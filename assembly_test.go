@@ -138,7 +138,7 @@ func TestAssembly_install_DependenciesAlreadySatisfied(t *testing.T) {
 	internal := asm.(*assembly)
 
 	// Satisfy ConsumedKey in advance
-	err := internal.putData(ConsumedKey, 42)
+	err := internal.putDataValue(ConsumedKey, 42)
 	require.NoError(t, err)
 
 	m := &MockModule{
@@ -178,55 +178,55 @@ func TestAssembly_install_DiscoveryError(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestAssembly_putData_getData(t *testing.T) {
+func TestAssembly_putDataValue_getDataValue(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
 
-	// putData: store a value
-	err := internal.putData(FooKey, 123)
+	// putDataValue: store a value
+	err := internal.putDataValue(FooKey, 123)
 	require.NoError(t, err)
 
-	// getData: retrieve the value
-	val, err := internal.getData(FooKey)
+	// getDataValue: retrieve the value
+	val, err := internal.getDataValue(FooKey)
 	require.NoError(t, err)
 	require.Equal(t, 123, val)
 }
 
-func TestAssembly_putData_NilKey(t *testing.T) {
+func TestAssembly_putDataValue_NilKey(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
-	err := internal.putData(nil, 1)
+	err := internal.putDataValue(nil, 1)
 	require.Error(t, err)
 }
 
-func TestAssembly_putData_DuplicateKey(t *testing.T) {
+func TestAssembly_putDataValue_DuplicateKey(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
 
-	// First putData: should succeed
-	err := internal.putData(FooKey, 1)
+	// First putDataValue: should succeed
+	err := internal.putDataValue(FooKey, 1)
 	require.NoError(t, err)
 
-	// Second putData: should fail (duplicate key)
-	err = internal.putData(FooKey, 2)
+	// Second putDataValue: should fail (duplicate key)
+	err = internal.putDataValue(FooKey, 2)
 	require.Error(t, err)
 
-	// getData: should return the original value (1)
-	val, err := internal.getData(FooKey)
+	// getDataValue: should return the original value (1)
+	val, err := internal.getDataValue(FooKey)
 	require.NoError(t, err)
 	require.Equal(t, 1, val)
 }
 
-func TestAssembly_getData_NilKey(t *testing.T) {
+func TestAssembly_getDataValue_NilKey(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
-	_, err := internal.getData(nil)
+	_, err := internal.getDataValue(nil)
 	require.Error(t, err)
 }
 
-func TestAssembly_getData_MissingKey(t *testing.T) {
+func TestAssembly_getDataValue_MissingKey(t *testing.T) {
 	asm, _ := NewAssembly()
 	internal := asm.(*assembly)
-	_, err := internal.getData(FooKey)
+	_, err := internal.getDataValue(FooKey)
 	require.Error(t, err)
 }

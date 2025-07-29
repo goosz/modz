@@ -113,7 +113,9 @@ func (a *assembly) install(m Module, parent *binder) error {
 	return nil
 }
 
-func (a *assembly) getData(key DataKey) (any, error) {
+// getDataValue retrieves a value from the assembly's data map.
+// This is used internally by the binder.
+func (a *assembly) getDataValue(key DataKey) (any, error) {
 	if key == nil {
 		return nil, fmt.Errorf("data key is nil")
 	}
@@ -126,7 +128,9 @@ func (a *assembly) getData(key DataKey) (any, error) {
 	return val, nil
 }
 
-func (a *assembly) putData(key DataKey, value any) error {
+// putDataValue stores a value in the assembly's data map and notifies waiters.
+// This is used internally by the binder.
+func (a *assembly) putDataValue(key DataKey, value any) error {
 	if key == nil {
 		return fmt.Errorf("data key is nil")
 	}

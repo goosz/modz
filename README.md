@@ -23,7 +23,7 @@ Modz enables you to compose applications from loosely-coupled modules that decla
 - **Assembly:** Orchestrates the construction and wiring of modules and their dependencies.
 - **Module:** A self-contained component that declares what data it produces and consumes.
 - **Data:** A type-safe key and contract for sharing values between modules.
-- **Binder:** A controlled interface for modules to access and provide data during configuration, implementing both `DataReader` and `DataWriter` interfaces.
+- **Binder:** A controlled interface for modules to access and provide data during configuration.
 
 For a detailed API reference and technical documentation, see the [pkg.go.dev documentation](https://pkg.go.dev/github.com/goosz/modz).
 

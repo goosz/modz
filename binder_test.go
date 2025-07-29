@@ -59,7 +59,7 @@ func TestBinder_getData(t *testing.T) {
 	b, asm := newBinderTestFixture(mod)
 
 	// populate the assembly with a value for consumedKey.
-	err := asm.putData(ConsumedKey, 42)
+	err := asm.putDataValue(ConsumedKey, 42)
 	require.NoError(t, err)
 
 	// getData needs discovery to have run.
@@ -77,7 +77,7 @@ func TestBinder_getData_outsideConfigPhase(t *testing.T) {
 		ConsumesValue: Keys(ConsumedKey),
 	}
 	b, asm := newBinderTestFixture(mod)
-	err := asm.putData(ConsumedKey, 42)
+	err := asm.putDataValue(ConsumedKey, 42)
 	require.NoError(t, err)
 	err = b.discoverModule()
 	require.NoError(t, err)
@@ -99,7 +99,7 @@ func TestBinder_getData_undeclaredKey(t *testing.T) {
 	b, asm := newBinderTestFixture(mod)
 
 	// populate the assembly with a value for consumedKey.
-	err := asm.putData(ConsumedKey, 42)
+	err := asm.putDataValue(ConsumedKey, 42)
 	require.NoError(t, err)
 
 	// getData needs discovery to have run.
@@ -132,7 +132,7 @@ func TestBinder_putData(t *testing.T) {
 	require.NoError(t, err)
 
 	// check that the value was added to the assembly.
-	val, err := asm.getData(ProducedKey)
+	val, err := asm.getDataValue(ProducedKey)
 	require.NoError(t, err)
 	require.Equal(t, "produced", val)
 }
