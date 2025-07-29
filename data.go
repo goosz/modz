@@ -7,6 +7,28 @@ import (
 	"github.com/goosz/commonz"
 )
 
+// DataReader defines the interface for reading data values from a storage mechanism.
+type DataReader interface {
+	// getData retrieves a value stored under the specified DataKey.
+	//
+	// This method is used internally by the [Data].Get() method to access values.
+	// The value is returned as [any] and must be type-asserted by the calling code.
+	//
+	// Returns an error if the [DataKey] is not found or if the operation is not allowed.
+	getData(DataKey) (any, error)
+}
+
+// DataWriter defines the interface for writing data values to a storage mechanism.
+type DataWriter interface {
+	// putData stores a value under the specified DataKey.
+	//
+	// This method is used internally by the [Data].Put() method to store values.
+	// The value is stored as [any].
+	//
+	// Returns an error if the [DataKey] already has a value stored or if the operation is not allowed.
+	putData(DataKey, any) error
+}
+
 // Data represents a type-safe key for dependency injection within a Modz application.
 //
 // Each Data instance acts as both a key (for storing/retrieving values) and a contract
@@ -17,19 +39,19 @@ import (
 // Produces() and Consumes() methods.
 //
 // During the module's configuration phase, the Assembly provides modules with access to dependencies
-// through the Binder, allowing modules to wire up their required values using Get() and
-// Put() methods on their declared Data keys.
+// through data access interfaces (typically via the Binder), allowing modules to wire up their
+// required values using Get() and Put() methods on their declared Data keys.
 //
 // Data keys are intended to be used by application and module authors, not implemented directly.
 // Always use [NewData] to create new Data keys.
 type Data[T any] interface {
-	// Get retrieves the value of type T that was stored under this Data key in the Binder.
+	// Get retrieves the value of type T that was stored under this Data key in the provided DataReader.
 	// Returns an error if the value is not available or if there is a type mismatch.
-	Get(Binder) (T, error)
+	Get(DataReader) (T, error)
 
-	// Put stores a value of type T under this Data key in the Binder.
-	// Returns an error if the Binder is nil or if the value cannot be stored.
-	Put(Binder, T) error
+	// Put stores a value of type T under this Data key in the provided DataWriter.
+	// Returns an error if the DataWriter is nil or if the value cannot be stored.
+	Put(DataWriter, T) error
 
 	// sealData is an unexported marker method used to seal the interface.
 	sealData()
@@ -60,11 +82,11 @@ type dataKey[T any] struct {
 // Ensure that *dataKey[T] implements Data[T].
 var _ Data[any] = (*dataKey[any])(nil)
 
-func (d *dataKey[T]) Get(b Binder) (T, error) {
-	if b == nil {
-		return commonz.Zero[T](), errors.New("binder is nil")
+func (d *dataKey[T]) Get(r DataReader) (T, error) {
+	if r == nil {
+		return commonz.Zero[T](), errors.New("data reader is nil")
 	}
-	val, err := b.getData(d)
+	val, err := r.getData(d)
 	if err != nil {
 		return commonz.Zero[T](), err
 	}
@@ -76,11 +98,11 @@ func (d *dataKey[T]) Get(b Binder) (T, error) {
 	return typedVal, nil
 }
 
-func (d *dataKey[T]) Put(b Binder, t T) error {
-	if b == nil {
-		return errors.New("binder is nil")
+func (d *dataKey[T]) Put(w DataWriter, t T) error {
+	if w == nil {
+		return errors.New("data writer is nil")
 	}
-	return b.putData(d, t)
+	return w.putData(d, t)
 }
 
 func (d *dataKey[T]) sealData() {}
