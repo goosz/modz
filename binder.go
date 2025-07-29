@@ -2,11 +2,27 @@ package modz
 
 import (
 	"fmt"
+	"strings"
 
 	"sync/atomic"
 
 	"github.com/goosz/commonz"
 )
+
+// ConfigurationError represents an error that occurred during module configuration.
+// It provides context about which module encountered the error and what operation failed.
+type ConfigurationError struct {
+	ModuleName string
+	Operation  string
+	Err        error
+}
+
+func (e *ConfigurationError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("module %q %s: %v", e.ModuleName, e.Operation, e.Err)
+	}
+	return fmt.Sprintf("module %q %s failed", e.ModuleName, e.Operation)
+}
 
 // Binder represents the controlled interface that modules use to interact with the
 // [Assembly] during the module's configuration phase.
@@ -74,6 +90,9 @@ type binder struct {
 	inProgress atomic.Bool
 	// configured is true after configureModule has run once.
 	configured atomic.Bool
+
+	// configurationErrors tracks ConfigurationError instances encountered during module configuration for validation
+	configurationErrors []*ConfigurationError
 }
 
 // Ensure that *binder implements Binder and the data interfaces.
@@ -85,7 +104,11 @@ func (b *binder) Install(m Module) error {
 	if !b.inProgress.Load() {
 		return fmt.Errorf("Install can only be called during module configuration phase for module %q", b.moduleSignature)
 	}
-	return b.assembly.install(m, b)
+	err := b.assembly.install(m, b)
+	if err != nil {
+		return b.trackConfigurationError("Install", err)
+	}
+	return nil
 }
 
 func (b *binder) getData(key DataKey) (any, error) {
@@ -93,9 +116,13 @@ func (b *binder) getData(key DataKey) (any, error) {
 		return nil, fmt.Errorf("getData can only be called during module configuration phase for module %q", b.moduleSignature)
 	}
 	if _, ok := b.consumes[key]; !ok {
-		return nil, fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature)
+		return nil, b.trackConfigurationError("getData", fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature))
 	}
-	return b.assembly.getDataValue(key)
+	val, err := b.assembly.getDataValue(key)
+	if err != nil {
+		return nil, b.trackConfigurationError("getData", err)
+	}
+	return val, nil
 }
 
 func (b *binder) putData(key DataKey, value any) error {
@@ -103,13 +130,25 @@ func (b *binder) putData(key DataKey, value any) error {
 		return fmt.Errorf("putData can only be called during module configuration phase for module %q", b.moduleSignature)
 	}
 	if _, ok := b.produces[key]; !ok {
-		return fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature)
+		return b.trackConfigurationError("putData", fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature))
 	}
 	err := b.assembly.putDataValue(key, value)
-	if err == nil {
-		b.produced[key] = struct{}{}
+	if err != nil {
+		return b.trackConfigurationError("putData", err)
 	}
-	return err
+	b.produced[key] = struct{}{}
+	return nil
+}
+
+// trackConfigurationError creates a ConfigurationError, tracks it, and returns it.
+func (b *binder) trackConfigurationError(operation string, err error) *ConfigurationError {
+	configErr := &ConfigurationError{
+		ModuleName: b.moduleSignature.String(),
+		Operation:  operation,
+		Err:        err,
+	}
+	b.configurationErrors = append(b.configurationErrors, configErr)
+	return configErr
 }
 
 // discoverModule performs the module discovery phase, populating produces and consumes.
@@ -151,9 +190,23 @@ func (b *binder) configureModule() error {
 	b.inProgress.Store(true)
 	err := b.module.Configure(b)
 	b.inProgress.Store(false)
-	if err != nil {
-		return err
+
+	// Validate error handling: if the module returned nil but we tracked errors, that's suspicious
+	if err == nil && len(b.configurationErrors) > 0 {
+		// This suggests the module might be swallowing errors
+		var errorMsgs []string
+		for _, trackedErr := range b.configurationErrors {
+			errorMsgs = append(errorMsgs, trackedErr.Error())
+		}
+		swallowedError := fmt.Errorf("module returned nil error but encountered errors during configuration: %s",
+			strings.Join(errorMsgs, "; "))
+		return b.trackConfigurationError("Configure", swallowedError)
 	}
+
+	if err != nil {
+		return b.trackConfigurationError("Configure", err)
+	}
+
 	// Check that all declared produces keys were actually produced
 	var missing []DataKey
 	for k := range b.produces {
@@ -162,22 +215,35 @@ func (b *binder) configureModule() error {
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("module %s did not produce all declared keys: %v", b.moduleSignature, missing)
+		missingKeysError := fmt.Errorf("module did not produce all declared keys: %v", missing)
+		return b.trackConfigurationError("Configure", missingKeysError)
 	}
 	return nil
+}
+
+// GetConfigurationErrors returns a copy of all ConfigurationError instances that were encountered during configuration.
+// This method is intended for introspection and debugging purposes.
+func (b *binder) GetConfigurationErrors() []*ConfigurationError {
+	if len(b.configurationErrors) == 0 {
+		return nil
+	}
+	result := make([]*ConfigurationError, len(b.configurationErrors))
+	copy(result, b.configurationErrors)
+	return result
 }
 
 // newBinder creates a new binder instance for the given module and signature, with an optional parent binder.
 // This function is used internally by the [Assembly] to set up the configuration context for a module.
 func newBinder(a *assembly, m Module, parent *binder, sig moduleSignature) *binder {
 	return &binder{
-		moduleSignature: sig,
-		module:          m,
-		parent:          parent,
-		assembly:        a,
-		produces:        make(map[DataKey]struct{}),
-		consumes:        make(map[DataKey]struct{}),
-		waiting:         make(map[DataKey]struct{}),
-		produced:        make(map[DataKey]struct{}),
+		moduleSignature:     sig,
+		module:              m,
+		parent:              parent,
+		assembly:            a,
+		produces:            make(map[DataKey]struct{}),
+		consumes:            make(map[DataKey]struct{}),
+		waiting:             make(map[DataKey]struct{}),
+		produced:            make(map[DataKey]struct{}),
+		configurationErrors: make([]*ConfigurationError, 0),
 	}
 }

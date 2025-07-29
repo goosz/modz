@@ -93,7 +93,7 @@ func TestBinder_getData_undeclaredKey(t *testing.T) {
 		ConfigureFunc: func(binder Binder) error {
 			_, err := ConsumedKey.Get(binder)
 			require.Error(t, err)
-			return nil
+			return err
 		},
 	}
 	b, asm := newBinderTestFixture(mod)
@@ -108,7 +108,33 @@ func TestBinder_getData_undeclaredKey(t *testing.T) {
 
 	// this will call getData() via mod.ConfigureFunc above.
 	err = b.configureModule()
+	require.Error(t, err)
+}
+
+func TestBinder_getData_assemblyError(t *testing.T) {
+	// Test getData when assembly.getDataValue returns an error
+	mod := &MockModule{
+		NameValue:     "test",
+		ConsumesValue: Keys(ConsumedKey),
+		ConfigureFunc: func(b Binder) error {
+			// This should fail because the assembly doesn't have the value
+			_, err := b.getData(ConsumedKey)
+			return err
+		},
+	}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
 	require.NoError(t, err)
+
+	err = b.configureModule()
+	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with proper context
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "Configure", configErr.Operation)
+	require.Contains(t, configErr.Error(), "no value for data key")
 }
 
 func TestBinder_putData(t *testing.T) {
@@ -157,7 +183,7 @@ func TestBinder_putData_undeclaredKey(t *testing.T) {
 		ConfigureFunc: func(binder Binder) error {
 			err := ProducedKey.Put(binder, "error")
 			require.Error(t, err)
-			return nil
+			return err
 		},
 	}
 	b, asm := newBinderTestFixture(mod)
@@ -168,11 +194,42 @@ func TestBinder_putData_undeclaredKey(t *testing.T) {
 
 	// this will call putData() via mod.ConfigureFunc above.
 	err = b.configureModule()
-	require.NoError(t, err)
+	require.Error(t, err)
 
 	// check that the value was not added to the assembly.
 	_, found := asm.data[ProducedKey]
 	require.False(t, found)
+}
+
+func TestBinder_putData_assemblyError(t *testing.T) {
+	// Test putData when assembly.putDataValue returns an error
+	mod := &MockModule{
+		NameValue:     "test",
+		ProducesValue: Keys(ProducedKey),
+		ConfigureFunc: func(b Binder) error {
+			// First put should succeed
+			err := b.putData(ProducedKey, "first")
+			if err != nil {
+				return err
+			}
+			// Second put should fail (duplicate key)
+			err = b.putData(ProducedKey, "second")
+			return err
+		},
+	}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	err = b.configureModule()
+	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with proper context
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "Configure", configErr.Operation)
+	require.Contains(t, configErr.Error(), "data key already set")
 }
 
 func TestBinder_discoverModule(t *testing.T) {
@@ -258,6 +315,10 @@ func TestBinder_configureModule(t *testing.T) {
 	err = b.configureModule()
 	require.NoError(t, err)
 	require.True(t, called)
+
+	// Test that no configuration errors are tracked when configuration succeeds
+	trackedErrors := b.GetConfigurationErrors()
+	require.Nil(t, trackedErrors)
 }
 
 func TestBinder_configureModule_error(t *testing.T) {
@@ -274,6 +335,19 @@ func TestBinder_configureModule_error(t *testing.T) {
 	// this will call mod.ConfigureFunc above.
 	err = b.configureModule()
 	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with proper context
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "error", configErr.ModuleName)
+	require.Equal(t, "Configure", configErr.Operation)
+	require.Contains(t, configErr.Error(), "error")
+
+	// Test error tracking
+	trackedErrors := b.GetConfigurationErrors()
+	require.NotNil(t, trackedErrors)
+	require.Len(t, trackedErrors, 1)
+	require.Contains(t, trackedErrors[0].Error(), "error")
 }
 
 func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
@@ -291,6 +365,19 @@ func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
 	// this will call mod.ConfigureFunc above.
 	err = b.configureModule()
 	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with proper context
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "mod", configErr.ModuleName)
+	require.Equal(t, "Configure", configErr.Operation)
+	require.Contains(t, configErr.Error(), "module did not produce all declared keys")
+
+	// Test error tracking
+	trackedErrors := b.GetConfigurationErrors()
+	require.NotNil(t, trackedErrors)
+	require.Len(t, trackedErrors, 1)
+	require.Contains(t, trackedErrors[0].Error(), "module did not produce all declared keys")
 }
 
 func TestBinder_configureModule_twice(t *testing.T) {
@@ -309,4 +396,48 @@ func TestBinder_configureModule_twice(t *testing.T) {
 
 	err = b.configureModule()
 	require.Error(t, err, "second call to configureModule should return an error")
+}
+
+func TestBinder_configureModule_errorSwallowing(t *testing.T) {
+	badModule := &MockModule{
+		NameValue: "BadModule",
+		ConfigureFunc: func(b Binder) error {
+			// This is BAD: we're calling Install but ignoring the error
+			_ = b.Install(&MockModule{NameValue: "BadModule"}) // This will fail (duplicate module) but we ignore it
+
+			// This is also BAD: we're trying to get an undeclared key but ignoring the error
+			_, _ = ConsumedKey.Get(b) // This will fail but we ignore it
+
+			// This is also BAD: we're trying to put an undeclared key but ignoring the error
+			_ = ProducedKey.Put(b, "oops") // This will fail but we ignore it
+
+			// Return nil despite encountering errors - this is what we want to detect
+			return nil
+		},
+	}
+	assembly, err := NewAssembly(badModule)
+	require.NoError(t, err)
+
+	err = assembly.Build()
+	require.Error(t, err)
+
+	// Verify we get a ConfigurationError with proper context
+	var moduleErr *ConfigurationError
+	require.ErrorAs(t, err, &moduleErr)
+	require.Equal(t, "BadModule", moduleErr.ModuleName)
+	require.Equal(t, "Configure", moduleErr.Operation)
+	require.Contains(t, moduleErr.Error(), "module returned nil error but encountered errors during configuration")
+}
+
+func TestConfigurationError_Error_WithNilErr(t *testing.T) {
+	configErr := &ConfigurationError{
+		ModuleName: "TestModule",
+		Operation:  "TestOperation",
+		Err:        nil,
+	}
+
+	errorMsg := configErr.Error()
+	require.Contains(t, errorMsg, "TestModule")
+	require.Contains(t, errorMsg, "TestOperation")
+	require.Contains(t, errorMsg, "failed")
 }

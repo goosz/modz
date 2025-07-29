@@ -61,6 +61,12 @@ type Module interface {
 	// of data. Such initialization should be deferred to runtime after the
 	// [Assembly] Build() has completed.
 	//
+	// **Error Handling Requirements:**
+	// - Configure MUST return any errors encountered from Binder operations (Install, Get, Put)
+	// - Do not swallow or ignore errors from Binder methods
+	// - The framework will detect and report modules that return nil despite encountering errors
+	// - Return errors immediately when they occur; do not continue with partial configuration
+	//
 	// Returns an error if configuration fails, which will halt the [Assembly] build
 	// process.
 	Configure(Binder) error

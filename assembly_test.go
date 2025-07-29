@@ -103,6 +103,13 @@ func TestAssembly_Build_ConfigureError(t *testing.T) {
 	require.NotNil(t, asm)
 	err = asm.Build()
 	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with proper context
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "m1", configErr.ModuleName)
+	require.Equal(t, "Configure", configErr.Operation)
+	require.Contains(t, configErr.Error(), "configure failed")
 }
 
 func TestAssembly_Build_Twice(t *testing.T) {

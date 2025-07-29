@@ -24,6 +24,15 @@
 //     are only valid during this configuration phase; calling them outside this phase is strictly
 //     enforced and will result in an error.
 //
+// # Error Handling
+//
+// The framework provides robust error handling and validation during module configuration:
+//   - All configuration errors are wrapped with [ConfigurationError] to provide context about which
+//     module and operation failed
+//   - The framework detects when modules return nil errors despite encountering configuration problems
+//   - Modules must properly handle and return errors from Binder operations (Install, Get, Put)
+//   - Missing declared dependencies are automatically detected and reported
+//
 // # Assembly Lifecycle
 //
 // The [Assembly] is responsible for orchestrating the module lifecycle. It first builds the
