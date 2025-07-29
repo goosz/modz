@@ -20,7 +20,7 @@
 //     it produces and consumes, building the dependency graph.
 //  2. The module's configuration phase: The [Assembly] provides each [Module] with a [Binder] to wire
 //     up its dependencies and store produced values. The [Binder] provides data access through its
-//     [DataReader] and [DataWriter] interfaces. All of these methods (Install, getData, and putData)
+//     data access methods. All of these methods (Install, getData, and putData)
 //     are only valid during this configuration phase; calling them outside this phase is strictly
 //     enforced and will result in an error.
 //

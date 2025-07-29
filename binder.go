@@ -24,8 +24,7 @@ import (
 // they are intended for single-threaded configuration use and should not be used from
 // goroutines.
 //
-// The framework strictly enforces that Install and the data access methods (getData and putData
-// from the embedded [DataReader] and [DataWriter] interfaces) may only be called during the
+// The framework strictly enforces that Install and the data access methods (getData and putData) may only be called during the
 // configuration phase (i.e., while the module's Configure method is running). If these methods
 // are called outside of this phase, they will return an error.
 //
@@ -96,7 +95,7 @@ func (b *binder) getData(key DataKey) (any, error) {
 	if _, ok := b.consumes[key]; !ok {
 		return nil, fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature)
 	}
-	return b.assembly.getData(key)
+	return b.assembly.getDataValue(key)
 }
 
 func (b *binder) putData(key DataKey, value any) error {
@@ -106,7 +105,7 @@ func (b *binder) putData(key DataKey, value any) error {
 	if _, ok := b.produces[key]; !ok {
 		return fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature)
 	}
-	err := b.assembly.putData(key, value)
+	err := b.assembly.putDataValue(key, value)
 	if err == nil {
 		b.produced[key] = struct{}{}
 	}
