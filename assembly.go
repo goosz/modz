@@ -19,9 +19,16 @@ import (
 //
 // Build can only be called once per Assembly instance; subsequent calls will return an error.
 //
+// Assembly implements [DataReader], allowing access to the data values produced by modules.
+// However, the data access methods (getData) can only be called after Build() has completed
+// successfully. Attempting to access data before Build() completes or after Build() fails
+// will return an error.
+//
 // This design keeps the framework focused on construction and wiring, leaving the
 // application's runtime behavior and lifecycle management in the hands of the user.
 type Assembly interface {
+	DataReader
+
 	// Build orchestrates the complete module assembly process.
 	//
 	// This method orchestrates each [Module]'s lifecycle phases to construct
@@ -33,6 +40,10 @@ type Assembly interface {
 	// is ready for runtime use.
 	//
 	// Build can only be called once per Assembly instance; subsequent calls will return an error.
+	//
+	// After Build() completes successfully, the Assembly can be used as a [DataReader]
+	// to access the data values produced by modules. Before Build() completes or after
+	// Build() fails, data access methods will return an error.
 	Build() error
 
 	// sealAssembly is an unexported marker method used to seal the interface.
@@ -42,13 +53,15 @@ type Assembly interface {
 // assembly is the internal implementation of Assembly.
 //
 // The built field tracks whether Build has already been called, enforcing once-only semantics.
+// The buildCompleted field tracks whether Build has completed successfully.
 type assembly struct {
-	mu       sync.RWMutex // protects all fields below except built
-	bindings map[moduleSignature]*binder
-	data     map[DataKey]any
-	waiters  map[DataKey][]*binder
-	ready    binderQueue
-	built    atomic.Bool // true after Build has been called
+	mu             sync.RWMutex // protects all fields below except built and buildCompleted
+	bindings       map[moduleSignature]*binder
+	data           map[DataKey]any
+	waiters        map[DataKey][]*binder
+	ready          binderQueue
+	built          atomic.Bool // true after Build has been called
+	buildCompleted atomic.Bool // true after Build has completed successfully
 }
 
 // Ensure that *assembly implements Assembly.
@@ -79,10 +92,22 @@ func (a *assembly) Build() error {
 		}
 		return fmt.Errorf("build incomplete: some modules are still waiting for data keys: %v", missingKeys)
 	}
+	a.buildCompleted.Store(true)
 	return nil
 }
 
 func (*assembly) sealAssembly() {}
+
+// getData retrieves a value stored under the specified DataKey.
+//
+// This method can only be called after Build() has completed successfully.
+// Returns an error if called before Build() completes or if the DataKey is not found.
+func (a *assembly) getData(key DataKey) (any, error) {
+	if !a.buildCompleted.Load() {
+		return nil, fmt.Errorf("getData can only be called after Build has completed successfully")
+	}
+	return a.getDataValue(key)
+}
 
 // install adds a module into the assembly. Returns an error if the module cannot be installed.
 func (a *assembly) install(m Module, parent *binder) error {
