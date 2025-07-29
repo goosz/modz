@@ -15,28 +15,30 @@ var (
 )
 
 func TestData_PutAndGet(t *testing.T) {
-	binder := modz.NewMockBinder()
-	err := fooKey.Put(binder, 42)
+	mock := modz.NewMockDataReadWriter()
+
+	err := fooKey.Put(mock, 42)
 	require.NoError(t, err)
-	val, err := fooKey.Get(binder)
+
+	val, err := fooKey.Get(mock)
 	require.NoError(t, err)
 	require.Equal(t, 42, val)
 }
 
 func TestData_Get_TypeMismatch(t *testing.T) {
-	binder := modz.NewMockBinder()
-	binder.Store[fooKey] = "not an int"
-	_, err := fooKey.Get(binder)
+	mock := modz.NewMockDataReadWriter()
+	mock.Store[fooKey] = "not an int"
+	_, err := fooKey.Get(mock)
 	require.Error(t, err)
 }
 
-func TestData_Get_PropagatesBinderError(t *testing.T) {
-	binder := modz.NewMockBinder()
-	_, err := fooKey.Get(binder)
-	require.Error(t, err, "Get should return any error from the Binder")
+func TestData_Get_PropagatesReaderError(t *testing.T) {
+	mock := modz.NewMockDataReadWriter()
+	_, err := fooKey.Get(mock)
+	require.Error(t, err, "Get should return any error from the DataReader")
 }
 
-func TestData_GetPut_NilBinder(t *testing.T) {
+func TestData_GetPut_NilInterfaces(t *testing.T) {
 	_, err := fooKey.Get(nil)
 	require.Error(t, err)
 	err = fooKey.Put(nil, 1)
@@ -44,10 +46,10 @@ func TestData_GetPut_NilBinder(t *testing.T) {
 }
 
 func TestData_Put_Duplicate(t *testing.T) {
-	binder := modz.NewMockBinder()
-	err := fooKey.Put(binder, 1)
+	mock := modz.NewMockDataReadWriter()
+	err := fooKey.Put(mock, 1)
 	require.NoError(t, err)
-	err = fooKey.Put(binder, 2)
+	err = fooKey.Put(mock, 2)
 	require.Error(t, err, "Put should return an error if the key is already set")
 }
 

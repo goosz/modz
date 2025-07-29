@@ -24,12 +24,16 @@ import (
 // they are intended for single-threaded configuration use and should not be used from
 // goroutines.
 //
-// The framework strictly enforces that Install, getData, and putData may only be called
-// during the configuration phase (i.e., while the module's Configure method is running).
-// If these methods are called outside of this phase, they will return an error.
+// The framework strictly enforces that Install and the data access methods (getData and putData
+// from the embedded [DataReader] and [DataWriter] interfaces) may only be called during the
+// configuration phase (i.e., while the module's Configure method is running). If these methods
+// are called outside of this phase, they will return an error.
 //
 // Additionally, configureModule can only be called once per binder; subsequent calls will return an error.
 type Binder interface {
+	DataReader
+	DataWriter
+
 	// Install adds a new module to the [Assembly] during the module's configuration phase.
 	//
 	// This method allows modules to dynamically install additional modules that may be
@@ -39,27 +43,6 @@ type Binder interface {
 	// Returns an error if the module cannot be installed or if called outside of the
 	// module's configuration phase (strictly enforced).
 	Install(Module) error
-
-	// getData retrieves a value stored under the specified DataKey.
-	//
-	// This method is used internally by the [Data].Get() method to access values from the
-	// Assembly's data. The value is returned as [any] and must be type-asserted by the
-	// calling code.
-	//
-	// Returns an error if the [DataKey] is not found, if called outside of the module's
-	// configuration phase, or if the calling module did not declare this key in its
-	// Consumes() method. This phase restriction is strictly enforced.
-	getData(DataKey) (any, error)
-
-	// putData stores a value under the specified DataKey.
-	//
-	// This method is used internally by the [Data].Put() method to store values in the
-	// Assembly's data. The value is stored as [any].
-	//
-	// Returns an error if the [DataKey] already has a value stored, if called outside of
-	// the module's configuration phase, or if the calling module did not declare this key
-	// in its Produces() method. This phase restriction is strictly enforced.
-	putData(DataKey, any) error
 }
 
 // binder is the internal implementation used by [Assembly] to manage a module's lifecycle.
@@ -69,8 +52,8 @@ type Binder interface {
 // Modules interact with the [Binder] interface, not this type directly.
 //
 // The binder enforces once-only semantics for configureModule (it can only be called once per binder),
-// and strictly enforces that Install, getData, and putData may only be called during the configuration phase.
-// Errors are returned if these rules are violated.
+// and strictly enforces that Install and the data access methods (getData and putData) may only be called
+// during the configuration phase. Errors are returned if these rules are violated.
 type binder struct {
 	moduleSignature moduleSignature
 	module          Module
@@ -94,8 +77,10 @@ type binder struct {
 	configured atomic.Bool
 }
 
-// Ensure that *binder implements Binder.
+// Ensure that *binder implements Binder and the data interfaces.
 var _ Binder = (*binder)(nil)
+var _ DataReader = (*binder)(nil)
+var _ DataWriter = (*binder)(nil)
 
 func (b *binder) Install(m Module) error {
 	if !b.inProgress.Load() {
