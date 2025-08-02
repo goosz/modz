@@ -447,31 +447,32 @@ func TestBinder_failFastBehavior(t *testing.T) {
 		ProducesValue: Keys(ProducedKey),
 		ConsumesValue: Keys(ConsumedKey),
 		ConfigureFunc: func(b Binder) error {
-			// First operation that will fail
+			// First operation that will succeed
 			err := b.putData(ProducedKey, "first")
-			if err != nil {
-				return err
-			}
+			require.NoError(t, err)
 
 			// Second put should fail (duplicate key) and set the error
 			err = b.putData(ProducedKey, "second")
-			if err != nil {
-				return err
-			}
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
 
 			// These operations should all fail fast with the first error
-			err = b.Install(&MockModule{NameValue: "should-fail-fast"})
-			if err != nil {
-				return err
-			}
+			// Test that Install returns a fail-fast error
+			installErr := b.Install(&MockModule{NameValue: "should-fail-fast"})
+			require.Error(t, installErr)
+			require.Contains(t, installErr.Error(), "Install: failed due to previous error")
 
-			_, err = b.getData(ConsumedKey)
-			if err != nil {
-				return err
-			}
+			// Test that getData returns a fail-fast error
+			_, getErr := b.getData(ConsumedKey)
+			require.Error(t, getErr)
+			require.Contains(t, getErr.Error(), "getData: failed due to previous error")
 
-			err = b.putData(ProducedKey, "should-also-fail-fast")
-			return err
+			// Test that putData returns a fail-fast error
+			putErr := b.putData(ProducedKey, "should-also-fail-fast")
+			require.Error(t, putErr)
+			require.Contains(t, putErr.Error(), "putData: failed due to previous error")
+
+			return nil
 		},
 	}
 	b, _ := newBinderTestFixture(mod)
