@@ -71,7 +71,7 @@ var _ Assembly = (*assembly)(nil)
 
 func (a *assembly) Build() error {
 	if !a.built.CompareAndSwap(false, true) {
-		return fmt.Errorf("Build can only be called once on this Assembly")
+		return fmt.Errorf("Build: can only be called once")
 	}
 	for {
 		a.mu.Lock()
@@ -106,7 +106,7 @@ func (*assembly) sealAssembly() {}
 // Returns an error if called before Build() completes or if the DataKey is not found.
 func (a *assembly) getData(key DataKey) (any, error) {
 	if !a.buildCompleted.Load() {
-		return nil, fmt.Errorf("getData can only be called after Build has completed successfully")
+		return nil, fmt.Errorf("getData: can only be called after Build has completed successfully")
 	}
 	return a.getDataValue(key)
 }
@@ -114,13 +114,13 @@ func (a *assembly) getData(key DataKey) (any, error) {
 // install adds a module into the assembly. Returns an error if the module cannot be installed.
 func (a *assembly) install(m Module, parent *binder) error {
 	if m == nil {
-		return fmt.Errorf("cannot add nil module")
+		return newInstallError("unknown", "cannot add nil module")
 	}
 	sig := newModuleSignature(m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if _, exists := a.bindings[sig]; exists {
-		return fmt.Errorf("module %q already added", sig)
+		return newInstallError(sig.String(), "already added")
 	}
 	b := newBinder(a, m, parent, sig)
 	if err := b.discoverModule(); err != nil {
@@ -132,7 +132,7 @@ func (a *assembly) install(m Module, parent *binder) error {
 			return err
 		}
 		if existingProducer, exists := a.producers[k]; exists {
-			return fmt.Errorf("duplicate producer for data key %v: modules %q and %q both declare they produce it", k, existingProducer.moduleSignature, sig)
+			return fmt.Errorf("duplicate producer for data key '%s': modules '%s' and '%s' both declare they produce it", k, existingProducer.moduleSignature, sig)
 		}
 		a.producers[k] = b
 	}
@@ -158,13 +158,13 @@ func (a *assembly) install(m Module, parent *binder) error {
 // This is used internally by the binder.
 func (a *assembly) getDataValue(key DataKey) (any, error) {
 	if key == nil {
-		return nil, fmt.Errorf("data key is nil")
+		return nil, newDataOperationError(nil, "cannot get data with nil key")
 	}
 	a.mu.RLock()
 	val, ok := a.data[key]
 	a.mu.RUnlock()
 	if !ok {
-		return nil, fmt.Errorf("no value for data key")
+		return nil, newDataOperationError(key, "no value found")
 	}
 	return val, nil
 }
@@ -173,12 +173,12 @@ func (a *assembly) getDataValue(key DataKey) (any, error) {
 // This is used internally by the binder.
 func (a *assembly) putDataValue(key DataKey, value any) error {
 	if key == nil {
-		return fmt.Errorf("data key is nil")
+		return newDataOperationError(nil, "cannot put data with nil key")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if _, exists := a.data[key]; exists {
-		return fmt.Errorf("data key already set")
+		return newDataOperationError(key, "already set")
 	}
 	a.data[key] = value
 

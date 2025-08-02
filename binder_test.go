@@ -133,8 +133,8 @@ func TestBinder_getData_assemblyError(t *testing.T) {
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
 	require.Equal(t, "test", configErr.ModuleName)
-	require.Equal(t, "Configure", configErr.Operation)
-	require.Contains(t, configErr.Error(), "no value for data key")
+	require.Equal(t, "getData", configErr.Operation)
+	require.Contains(t, configErr.Error(), "data key 'Data[int](github.com/goosz/modz:consumed#5)': no value found")
 }
 
 func TestBinder_putData(t *testing.T) {
@@ -228,8 +228,8 @@ func TestBinder_putData_assemblyError(t *testing.T) {
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
 	require.Equal(t, "test", configErr.ModuleName)
-	require.Equal(t, "Configure", configErr.Operation)
-	require.Contains(t, configErr.Error(), "data key already set")
+	require.Equal(t, "putData", configErr.Operation)
+	require.Contains(t, configErr.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
 }
 
 func TestBinder_discoverModule(t *testing.T) {
@@ -317,8 +317,8 @@ func TestBinder_configureModule(t *testing.T) {
 	require.True(t, called)
 
 	// Test that no configuration errors are tracked when configuration succeeds
-	trackedErrors := b.GetConfigurationErrors()
-	require.Nil(t, trackedErrors)
+	trackedError := b.GetConfigurationError()
+	require.Nil(t, trackedError)
 }
 
 func TestBinder_configureModule_error(t *testing.T) {
@@ -344,10 +344,9 @@ func TestBinder_configureModule_error(t *testing.T) {
 	require.Contains(t, configErr.Error(), "error")
 
 	// Test error tracking
-	trackedErrors := b.GetConfigurationErrors()
-	require.NotNil(t, trackedErrors)
-	require.Len(t, trackedErrors, 1)
-	require.Contains(t, trackedErrors[0].Error(), "error")
+	trackedError := b.GetConfigurationError()
+	require.NotNil(t, trackedError)
+	require.Contains(t, trackedError.Error(), "error")
 }
 
 func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
@@ -374,10 +373,9 @@ func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
 	require.Contains(t, configErr.Error(), "module did not produce all declared keys")
 
 	// Test error tracking
-	trackedErrors := b.GetConfigurationErrors()
-	require.NotNil(t, trackedErrors)
-	require.Len(t, trackedErrors, 1)
-	require.Contains(t, trackedErrors[0].Error(), "module did not produce all declared keys")
+	trackedError := b.GetConfigurationError()
+	require.NotNil(t, trackedError)
+	require.Contains(t, trackedError.Error(), "module did not produce all declared keys")
 }
 
 func TestBinder_configureModule_twice(t *testing.T) {
@@ -425,8 +423,8 @@ func TestBinder_configureModule_errorSwallowing(t *testing.T) {
 	var moduleErr *ConfigurationError
 	require.ErrorAs(t, err, &moduleErr)
 	require.Equal(t, "BadModule", moduleErr.ModuleName)
-	require.Equal(t, "Configure", moduleErr.Operation)
-	require.Contains(t, moduleErr.Error(), "module returned nil error but encountered errors during configuration")
+	require.Equal(t, "Install", moduleErr.Operation)
+	require.Contains(t, moduleErr.Error(), "module 'BadModule': already added")
 }
 
 func TestConfigurationError_Error_WithNilErr(t *testing.T) {
@@ -440,4 +438,59 @@ func TestConfigurationError_Error_WithNilErr(t *testing.T) {
 	require.Contains(t, errorMsg, "TestModule")
 	require.Contains(t, errorMsg, "TestOperation")
 	require.Contains(t, errorMsg, "failed")
+}
+
+func TestBinder_failFastBehavior(t *testing.T) {
+	// Test that operations fail fast when there's already an error
+	mod := &MockModule{
+		NameValue:     "test",
+		ProducesValue: Keys(ProducedKey),
+		ConsumesValue: Keys(ConsumedKey),
+		ConfigureFunc: func(b Binder) error {
+			// First operation that will succeed
+			err := b.putData(ProducedKey, "first")
+			require.NoError(t, err)
+
+			// Second put should fail (duplicate key) and set the error
+			err = b.putData(ProducedKey, "second")
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
+
+			// These operations should all fail fast with the first error
+			// Test that Install returns a fail-fast error
+			installErr := b.Install(&MockModule{NameValue: "should-fail-fast"})
+			require.Error(t, installErr)
+			require.Contains(t, installErr.Error(), "Install: failed due to previous error")
+
+			// Test that getData returns a fail-fast error
+			_, getErr := b.getData(ConsumedKey)
+			require.Error(t, getErr)
+			require.Contains(t, getErr.Error(), "getData: failed due to previous error")
+
+			// Test that putData returns a fail-fast error
+			putErr := b.putData(ProducedKey, "should-also-fail-fast")
+			require.Error(t, putErr)
+			require.Contains(t, putErr.Error(), "putData: failed due to previous error")
+
+			return nil
+		},
+	}
+	b, _ := newBinderTestFixture(mod)
+	err := b.discoverModule()
+	require.NoError(t, err)
+
+	err = b.configureModule()
+	require.Error(t, err)
+
+	// Verify it's a ConfigurationError with the first error
+	var configErr *ConfigurationError
+	require.ErrorAs(t, err, &configErr)
+	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "putData", configErr.Operation)
+	require.Contains(t, configErr.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
+
+	// Verify the tracked error is the first one
+	trackedError := b.GetConfigurationError()
+	require.NotNil(t, trackedError)
+	require.Contains(t, trackedError.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
 }
