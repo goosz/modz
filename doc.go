@@ -29,6 +29,7 @@
 // The framework provides robust error handling and validation during module configuration:
 //   - All configuration errors are wrapped with [ConfigurationError] to provide context about which
 //     module and operation failed
+//   - The framework implements fail-fast behavior, tracking the first error encountered during configuration
 //   - The framework detects when modules return nil errors despite encountering configuration problems
 //   - Modules must properly handle and return errors from Binder operations (Install, Get, Put)
 //   - Missing declared dependencies are automatically detected and reported

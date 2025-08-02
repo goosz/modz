@@ -2,27 +2,10 @@ package modz
 
 import (
 	"fmt"
-	"strings"
-
 	"sync/atomic"
 
 	"github.com/goosz/commonz"
 )
-
-// ConfigurationError represents an error that occurred during module configuration.
-// It provides context about which module encountered the error and what operation failed.
-type ConfigurationError struct {
-	ModuleName string
-	Operation  string
-	Err        error
-}
-
-func (e *ConfigurationError) Error() string {
-	if e.Err != nil {
-		return fmt.Sprintf("module %q %s: %v", e.ModuleName, e.Operation, e.Err)
-	}
-	return fmt.Sprintf("module %q %s failed", e.ModuleName, e.Operation)
-}
 
 // Binder represents the controlled interface that modules use to interact with the
 // [Assembly] during the module's configuration phase.
@@ -91,8 +74,8 @@ type binder struct {
 	// configured is true after configureModule has run once.
 	configured atomic.Bool
 
-	// configurationErrors tracks ConfigurationError instances encountered during module configuration for validation
-	configurationErrors []*ConfigurationError
+	// configurationError tracks the first error from binder operations (Install, getData, putData) during configuration
+	configurationError *ConfigurationError
 }
 
 // Ensure that *binder implements Binder and the data interfaces.
@@ -102,7 +85,10 @@ var _ DataWriter = (*binder)(nil)
 
 func (b *binder) Install(m Module) error {
 	if !b.inProgress.Load() {
-		return fmt.Errorf("Install can only be called during module configuration phase for module %q", b.moduleSignature)
+		return newPhaseError("Install")
+	}
+	if b.configurationError != nil {
+		return newFailFastError("Install", b.configurationError)
 	}
 	err := b.assembly.install(m, b)
 	if err != nil {
@@ -113,10 +99,13 @@ func (b *binder) Install(m Module) error {
 
 func (b *binder) getData(key DataKey) (any, error) {
 	if !b.inProgress.Load() {
-		return nil, fmt.Errorf("getData can only be called during module configuration phase for module %q", b.moduleSignature)
+		return nil, newPhaseError("getData")
+	}
+	if b.configurationError != nil {
+		return nil, newFailFastError("getData", b.configurationError)
 	}
 	if _, ok := b.consumes[key]; !ok {
-		return nil, b.trackConfigurationError("getData", fmt.Errorf("module %q did not declare key in Consumes", b.moduleSignature))
+		return nil, b.trackConfigurationError("getData", newUndeclaredKeyError(b.moduleSignature.String(), key, "Consumes"))
 	}
 	val, err := b.assembly.getDataValue(key)
 	if err != nil {
@@ -127,10 +116,13 @@ func (b *binder) getData(key DataKey) (any, error) {
 
 func (b *binder) putData(key DataKey, value any) error {
 	if !b.inProgress.Load() {
-		return fmt.Errorf("putData can only be called during module configuration phase for module %q", b.moduleSignature)
+		return newPhaseError("putData")
+	}
+	if b.configurationError != nil {
+		return newFailFastError("putData", b.configurationError)
 	}
 	if _, ok := b.produces[key]; !ok {
-		return b.trackConfigurationError("putData", fmt.Errorf("module %q did not declare key in Produces", b.moduleSignature))
+		return b.trackConfigurationError("putData", newUndeclaredKeyError(b.moduleSignature.String(), key, "Produces"))
 	}
 	err := b.assembly.putDataValue(key, value)
 	if err != nil {
@@ -140,15 +132,17 @@ func (b *binder) putData(key DataKey, value any) error {
 	return nil
 }
 
-// trackConfigurationError creates a ConfigurationError, tracks it, and returns it.
+// trackConfigurationError creates a ConfigurationError for binder operations, tracks it, and returns it.
+// Only the first binder operation error is tracked; subsequent errors are ignored.
 func (b *binder) trackConfigurationError(operation string, err error) *ConfigurationError {
-	configErr := &ConfigurationError{
-		ModuleName: b.moduleSignature.String(),
-		Operation:  operation,
-		Err:        err,
+	if b.configurationError == nil {
+		b.configurationError = &ConfigurationError{
+			ModuleName: b.moduleSignature.String(),
+			Operation:  operation,
+			Err:        err,
+		}
 	}
-	b.configurationErrors = append(b.configurationErrors, configErr)
-	return configErr
+	return b.configurationError
 }
 
 // discoverModule performs the module discovery phase, populating produces and consumes.
@@ -185,21 +179,15 @@ func (b *binder) resolveDependency(k DataKey) bool {
 // It can only be called once; subsequent calls return an error.
 func (b *binder) configureModule() error {
 	if !b.configured.CompareAndSwap(false, true) {
-		return fmt.Errorf("configureModule can only be called once for module %q", b.moduleSignature)
+		return fmt.Errorf("configureModule: can only be called once")
 	}
 	b.inProgress.Store(true)
 	err := b.module.Configure(b)
 	b.inProgress.Store(false)
 
-	// Validate error handling: if the module returned nil but we tracked errors, that's suspicious
-	if err == nil && len(b.configurationErrors) > 0 {
-		// This suggests the module might be swallowing errors
-		var errorMsgs []string
-		for _, trackedErr := range b.configurationErrors {
-			errorMsgs = append(errorMsgs, trackedErr.Error())
-		}
-		swallowedError := fmt.Errorf("module returned nil error but encountered errors during configuration: %s",
-			strings.Join(errorMsgs, "; "))
+	// Validate error handling: if the module returned nil but we tracked binder operation errors, that's suspicious
+	if err == nil && b.configurationError != nil {
+		swallowedError := fmt.Errorf("module returned nil error but encountered binder operation errors during configuration: %v", b.configurationError)
 		return b.trackConfigurationError("Configure", swallowedError)
 	}
 
@@ -221,29 +209,24 @@ func (b *binder) configureModule() error {
 	return nil
 }
 
-// GetConfigurationErrors returns a copy of all ConfigurationError instances that were encountered during configuration.
+// GetConfigurationError returns the first binder operation error encountered during configuration, if any.
 // This method is intended for introspection and debugging purposes.
-func (b *binder) GetConfigurationErrors() []*ConfigurationError {
-	if len(b.configurationErrors) == 0 {
-		return nil
-	}
-	result := make([]*ConfigurationError, len(b.configurationErrors))
-	copy(result, b.configurationErrors)
-	return result
+func (b *binder) GetConfigurationError() *ConfigurationError {
+	return b.configurationError
 }
 
 // newBinder creates a new binder instance for the given module and signature, with an optional parent binder.
 // This function is used internally by the [Assembly] to set up the configuration context for a module.
 func newBinder(a *assembly, m Module, parent *binder, sig moduleSignature) *binder {
 	return &binder{
-		moduleSignature:     sig,
-		module:              m,
-		parent:              parent,
-		assembly:            a,
-		produces:            make(map[DataKey]struct{}),
-		consumes:            make(map[DataKey]struct{}),
-		waiting:             make(map[DataKey]struct{}),
-		produced:            make(map[DataKey]struct{}),
-		configurationErrors: make([]*ConfigurationError, 0),
+		moduleSignature: sig,
+		module:          m,
+		parent:          parent,
+		assembly:        a,
+		produces:        make(map[DataKey]struct{}),
+		consumes:        make(map[DataKey]struct{}),
+		waiting:         make(map[DataKey]struct{}),
+		produced:        make(map[DataKey]struct{}),
+		// configurationError starts as nil
 	}
 }

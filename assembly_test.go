@@ -242,7 +242,7 @@ func TestAssembly_getData_BeforeBuild(t *testing.T) {
 	asm, _ := NewAssembly()
 	_, err := asm.getData(FooKey)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+	require.Contains(t, err.Error(), "getData: can only be called after Build has completed successfully")
 }
 
 func TestAssembly_getData_AfterBuild(t *testing.T) {
@@ -260,7 +260,7 @@ func TestAssembly_getData_AfterBuild(t *testing.T) {
 	// Before Build, getData should fail
 	_, err = asm.getData(FooKey)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+	require.Contains(t, err.Error(), "getData: can only be called after Build has completed successfully")
 
 	// Build the assembly
 	err = asm.Build()
@@ -288,7 +288,7 @@ func TestAssembly_getData_AfterBuildFailure(t *testing.T) {
 	// Even after Build failure, getData should still fail (not succeed)
 	_, err = asm.getData(FooKey)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+	require.Contains(t, err.Error(), "getData: can only be called after Build has completed successfully")
 }
 
 func TestAssembly_DataGet_AfterBuild(t *testing.T) {
@@ -306,7 +306,7 @@ func TestAssembly_DataGet_AfterBuild(t *testing.T) {
 	// Before Build, Data.Get should fail
 	_, err = FooKey.Get(asm)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "getData can only be called after Build has completed successfully")
+	require.Contains(t, err.Error(), "getData: can only be called after Build has completed successfully")
 
 	// Build the assembly
 	err = asm.Build()

@@ -1,7 +1,6 @@
 package modz
 
 import (
-	"errors"
 	"fmt"
 	"reflect"
 	"sync/atomic"
@@ -96,7 +95,7 @@ var dataKeySerialCounter atomic.Uint64
 
 func (d *dataKey[T]) Get(r DataReader) (T, error) {
 	if r == nil {
-		return commonz.Zero[T](), errors.New("data reader is nil")
+		return commonz.Zero[T](), fmt.Errorf("data reader Get: is nil")
 	}
 	val, err := r.getData(d)
 	if err != nil {
@@ -105,14 +104,14 @@ func (d *dataKey[T]) Get(r DataReader) (T, error) {
 	typedVal, ok := val.(T)
 	if !ok {
 		var zero T
-		return zero, fmt.Errorf("type assertion failed: expected %T, got %T", zero, val)
+		return zero, fmt.Errorf("data key '%v': type assertion failed: expected %T, got %T", d, zero, val)
 	}
 	return typedVal, nil
 }
 
 func (d *dataKey[T]) Put(w DataWriter, t T) error {
 	if w == nil {
-		return errors.New("data writer is nil")
+		return fmt.Errorf("data writer Put: is nil")
 	}
 	return w.putData(d, t)
 }
