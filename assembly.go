@@ -57,8 +57,10 @@ type Assembly interface {
 type assembly struct {
 	mu             sync.RWMutex // protects all fields below except built and buildCompleted
 	bindings       map[moduleSignature]*binder
+	registry       *dataRegistry
 	data           map[DataKey]any
 	waiters        map[DataKey][]*binder
+	producers      map[DataKey]*binder // tracks which module produces each data key
 	ready          binderQueue
 	built          atomic.Bool // true after Build has been called
 	buildCompleted atomic.Bool // true after Build has completed successfully
@@ -124,7 +126,21 @@ func (a *assembly) install(m Module, parent *binder) error {
 	if err := b.discoverModule(); err != nil {
 		return err
 	}
+
+	for k := range b.produces {
+		if err := a.registry.Validate(k); err != nil {
+			return err
+		}
+		if existingProducer, exists := a.producers[k]; exists {
+			return fmt.Errorf("duplicate producer for data key %v: modules %q and %q both declare they produce it", k, existingProducer.moduleSignature, sig)
+		}
+		a.producers[k] = b
+	}
+
 	for k := range b.consumes {
+		if err := a.registry.Validate(k); err != nil {
+			return err
+		}
 		if _, present := a.data[k]; !present {
 			a.waiters[k] = append(a.waiters[k], b)
 		} else {
@@ -189,11 +205,13 @@ func (a *assembly) putDataValue(key DataKey, value any) error {
 // an [Assembly] ready for the Build() process.
 func NewAssembly(modules ...Module) (Assembly, error) {
 	asm := &assembly{
-		mu:       sync.RWMutex{},
-		bindings: make(map[moduleSignature]*binder),
-		data:     make(map[DataKey]any),
-		waiters:  make(map[DataKey][]*binder),
-		ready:    make(binderQueue, 0),
+		mu:        sync.RWMutex{},
+		bindings:  make(map[moduleSignature]*binder),
+		registry:  newDataRegistry(),
+		data:      make(map[DataKey]any),
+		waiters:   make(map[DataKey][]*binder),
+		producers: make(map[DataKey]*binder),
+		ready:     make(binderQueue, 0),
 	}
 	for _, m := range modules {
 		if err := asm.install(m, nil); err != nil {

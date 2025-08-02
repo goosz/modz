@@ -3,6 +3,8 @@ package modz
 import (
 	"errors"
 	"fmt"
+	"reflect"
+	"sync/atomic"
 
 	"github.com/goosz/commonz"
 )
@@ -45,6 +47,8 @@ type DataWriter interface {
 // Data keys are intended to be used by application and module authors, not implemented directly.
 // Always use [NewData] to create new Data keys.
 type Data[T any] interface {
+	DataKey
+
 	// Get retrieves the value of type T that was stored under this Data key in the provided DataReader.
 	// Returns an error if the value is not available or if there is a type mismatch.
 	Get(DataReader) (T, error)
@@ -52,19 +56,13 @@ type Data[T any] interface {
 	// Put stores a value of type T under this Data key in the provided DataWriter.
 	// Returns an error if the DataWriter is nil or if the value cannot be stored.
 	Put(DataWriter, T) error
-
-	// sealData is an unexported marker method used to seal the interface.
-	sealData()
 }
 
 // DataKey is a type-erased identifier for a [Data] instance.
 type DataKey interface {
-	// sealData is an unexported marker method used to seal the interface.
-	sealData()
+	// signature returns the unique identity of the Data key.
+	signature() dataKeySignature
 }
-
-// Ensure that Data[T] implements DataKey.
-var _ DataKey = (Data[any])(nil)
 
 // DataKeys is a convenience type representing a collection of [DataKey] values.
 type DataKeys []DataKey
@@ -74,13 +72,27 @@ func Keys(keys ...DataKey) DataKeys {
 	return keys
 }
 
+// dataKeySignature represents the unique identity of a Data key.
+type dataKeySignature struct {
+	name string
+	pkg  string
+}
+
+func (s dataKeySignature) String() string {
+	return fmt.Sprintf("%s:%s", s.pkg, s.name)
+}
+
 // dataKey is the concrete implementation of the Data interface.
 type dataKey[T any] struct {
-	name string
+	dataKeySignature dataKeySignature
+	serial           uint64
 }
 
 // Ensure that *dataKey[T] implements Data[T].
 var _ Data[any] = (*dataKey[any])(nil)
+
+// Global counter for generating unique serial numbers
+var dataKeySerialCounter atomic.Uint64
 
 func (d *dataKey[T]) Get(r DataReader) (T, error) {
 	if r == nil {
@@ -105,20 +117,41 @@ func (d *dataKey[T]) Put(w DataWriter, t T) error {
 	return w.putData(d, t)
 }
 
-func (d *dataKey[T]) sealData() {}
+func (d *dataKey[T]) signature() dataKeySignature {
+	return d.dataKeySignature
+}
 
 func (d *dataKey[T]) String() string {
-	return fmt.Sprintf("Data[%T](%q)", *new(T), d.name)
+	var zero T
+	return fmt.Sprintf("Data[%s](%s#%d)", commonz.TypeName(reflect.TypeOf(zero)), d.signature(), d.serial)
 }
 
 // NewData creates a new [Data] instance for managing data of type T.
 //
-// The provided name should be unique within your application and descriptive of the data
-// that will be stored under this key. While uniqueness is not currently enforced, it is
-// strongly recommended to avoid conflicts and to aid in debugging or logging.
+// The provided name should be unique within the declaring package and descriptive of the data
+// that will be stored under this key. The function automatically captures the package
+// information from the calling context to form a unique signature across all packages.
 //
-// Note: This implementation of NewData is temporary and incomplete. Additional features and
-// enforcement may be added as the framework evolves.
+// The returned Data key includes package information and a process-unique serial number
+// for enhanced identity and debugging.
+//
+// **Important:** This function must be called from package-level var declarations only.
+// It will panic if called from functions, methods, or any other context. This ensures
+// proper initialization and prevents runtime conflicts.
 func NewData[T any](name string) Data[T] {
-	return &dataKey[T]{name: name}
+	caller := commonz.GetCaller(commonz.ParentCaller)
+
+	if caller.Function != "init" {
+		panic(fmt.Sprintf("NewData must be called from package-level var declarations, not from %s.%s", caller.Package, caller.Function))
+	}
+
+	serial := dataKeySerialCounter.Add(1)
+
+	return &dataKey[T]{
+		dataKeySignature: dataKeySignature{
+			name: name,
+			pkg:  caller.Package,
+		},
+		serial: serial,
+	}
 }

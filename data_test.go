@@ -62,4 +62,54 @@ func TestDataKey_String(t *testing.T) {
 	str := fmt.Sprintf("%v", fooKey)
 	require.Contains(t, str, "foo", "String() should include the key name")
 	require.Contains(t, str, "int", "String() should include the type name")
+	require.Contains(t, str, "#", "String() should include the serial number")
+}
+
+func TestNewData_PanicWhenCalledFromFunction(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected NewData to panic when called from a function")
+		} else {
+			panicMsg := fmt.Sprintf("%v", r)
+			require.Contains(t, panicMsg, "NewData must be called from package-level var declarations")
+			require.Contains(t, panicMsg, "TestNewData_PanicWhenCalledFromFunction")
+		}
+	}()
+
+	// This should panic because it's called from a function, not a package-level var declaration
+	modz.NewData[string]("test-key")
+}
+
+func TestNewData_PanicWhenCalledFromMethod(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected NewData to panic when called from a method")
+		} else {
+			panicMsg := fmt.Sprintf("%v", r)
+			require.Contains(t, panicMsg, "NewData must be called from package-level var declarations")
+			require.Contains(t, panicMsg, "TestNewData_PanicWhenCalledFromMethod")
+		}
+	}()
+
+	// This should panic because it's called from a method, not a package-level var declaration
+	func() {
+		modz.NewData[string]("test-key")
+	}()
+}
+
+func TestNewData_PanicWhenCalledFromClosure(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("Expected NewData to panic when called from a closure")
+		} else {
+			panicMsg := fmt.Sprintf("%v", r)
+			require.Contains(t, panicMsg, "NewData must be called from package-level var declarations")
+			require.Contains(t, panicMsg, "TestNewData_PanicWhenCalledFromClosure")
+		}
+	}()
+
+	// This should panic because it's called from a closure, not a package-level var declaration
+	func() {
+		modz.NewData[string]("test-key")
+	}()
 }

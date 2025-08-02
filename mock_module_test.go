@@ -5,6 +5,10 @@ var (
 	ConsumedKey = NewData[int]("consumed")
 	FooKey      = NewData[int]("foo")
 	BarKey      = NewData[int]("bar")
+
+	// Keys for registry validation testing
+	ClashTestKey1 = NewData[int]("clash-test-1")
+	ClashTestKey2 = NewData[int]("clash-test-1") // Same signature as ClashTestKey1
 )
 
 // MockModule is a minimal implementation of Module for unit tests.
