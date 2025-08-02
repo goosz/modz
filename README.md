@@ -25,6 +25,11 @@ Modz enables you to compose applications from loosely-coupled modules that decla
 - **Data:** A type-safe key and contract for sharing values between modules.
 - **Binder:** A controlled interface for modules to access and provide data during configuration.
 
+The framework includes robust validation to prevent configuration errors:
+- Automatic detection of duplicate producers for the same data key
+- Data key signature clash detection to prevent conflicts between packages
+- Validation that data keys are properly declared at package level
+
 For a detailed API reference and technical documentation, see the [pkg.go.dev documentation](https://pkg.go.dev/github.com/goosz/modz).
 
 ## Getting Started

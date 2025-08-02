@@ -32,6 +32,17 @@
 //   - The framework detects when modules return nil errors despite encountering configuration problems
 //   - Modules must properly handle and return errors from Binder operations (Install, Get, Put)
 //   - Missing declared dependencies are automatically detected and reported
+//   - Duplicate producers for the same data key are detected and reported during module installation
+//   - Data key signature clashes are detected and reported to prevent conflicts between packages
+//
+// # Data Key Management
+//
+// Data keys are automatically validated to ensure uniqueness and prevent conflicts:
+//   - Each data key includes package information and a process-unique serial number
+//   - The framework detects when different data keys have the same signature (name + package)
+//   - NewData() must be called from package-level var declarations to ensure proper initialization
+//     (panics if called from other contexts)
+//   - Data keys are validated during module installation to catch configuration errors early
 //
 // # Assembly Lifecycle
 //

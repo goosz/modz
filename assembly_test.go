@@ -317,3 +317,65 @@ func TestAssembly_DataGet_AfterBuild(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 42, val)
 }
+
+func TestAssembly_DuplicateProducers(t *testing.T) {
+	// Create two modules that both declare they produce the same data key (FooKey)
+	module1 := &MockModule{
+		NameValue:     "module1",
+		ProducesValue: Keys(FooKey),
+		ConsumesValue: Keys(),
+	}
+
+	module2 := &MockModule{
+		NameValue:     "module2",
+		ProducesValue: Keys(FooKey),
+		ConsumesValue: Keys(),
+	}
+
+	// Try to create an assembly with both modules
+	_, err := NewAssembly(module1, module2)
+
+	// Should get an error about duplicate producers
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "duplicate producer for data key")
+	require.Contains(t, err.Error(), "foo")
+	require.Contains(t, err.Error(), "both declare they produce it")
+}
+
+func TestAssembly_Install_RegistryValidationError_Produces(t *testing.T) {
+	// Create a module that produces a key with a signature clash
+	m1 := &MockModule{
+		NameValue:     "m1",
+		ProducesValue: Keys(ClashTestKey1),
+	}
+
+	m2 := &MockModule{
+		NameValue:     "m2",
+		ProducesValue: Keys(ClashTestKey2), // Same signature as ClashTestKey1
+	}
+
+	// Try to create an assembly with both modules
+	// This should fail during installation due to registry validation error
+	_, err := NewAssembly(m1, m2)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "data key signature clash")
+}
+
+func TestAssembly_Install_RegistryValidationError_Consumes(t *testing.T) {
+	// Create a module that consumes a key with a signature clash
+	m1 := &MockModule{
+		NameValue:     "m1",
+		ConsumesValue: Keys(ClashTestKey1),
+	}
+
+	m2 := &MockModule{
+		NameValue:     "m2",
+		ConsumesValue: Keys(ClashTestKey2), // Same signature as ClashTestKey1
+	}
+
+	// Try to create an assembly with both modules
+	// This should fail during installation due to registry validation error
+	_, err := NewAssembly(m1, m2)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "data key signature clash")
+}

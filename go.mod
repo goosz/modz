@@ -3,7 +3,7 @@ module github.com/goosz/modz
 go 1.24.4
 
 require (
-	github.com/goosz/commonz v0.0.0-20250717080238-14897c4b246f
+	github.com/goosz/commonz v0.0.0-20250730041246-6e5a1158ea72
 	github.com/stretchr/testify v1.10.0
 )
 
