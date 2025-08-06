@@ -5,16 +5,16 @@ import "fmt"
 // ConfigurationError represents an error that occurred during module configuration.
 // It provides context about which module encountered the error and what operation failed.
 type ConfigurationError struct {
-	ModuleName string
-	Operation  string
-	Err        error
+	ModuleID  string
+	Operation string
+	Err       error
 }
 
 func (e *ConfigurationError) Error() string {
 	if e.Err != nil {
-		return fmt.Sprintf("module %q %s: %v", e.ModuleName, e.Operation, e.Err)
+		return fmt.Sprintf("module '%s' %s: %v", e.ModuleID, e.Operation, e.Err)
 	}
-	return fmt.Sprintf("module %q %s failed", e.ModuleName, e.Operation)
+	return fmt.Sprintf("module '%s' %s failed", e.ModuleID, e.Operation)
 }
 
 // newPhaseError creates a consistent error for phase violations
@@ -34,7 +34,7 @@ func newInstallError(moduleName string, message string) error {
 
 // newDataOperationError creates a consistent error for data operation failures
 func newDataOperationError(key DataKey, message string) error {
-	return fmt.Errorf("data key '%v': %s", key, message)
+	return fmt.Errorf("data key '%s': %s", key, message)
 }
 
 // newFailFastError creates a consistent error for fail-fast behavior

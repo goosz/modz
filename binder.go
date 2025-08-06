@@ -137,9 +137,9 @@ func (b *binder) putData(key DataKey, value any) error {
 func (b *binder) trackConfigurationError(operation string, err error) *ConfigurationError {
 	if b.configurationError == nil {
 		b.configurationError = &ConfigurationError{
-			ModuleName: b.moduleSignature.String(),
-			Operation:  operation,
-			Err:        err,
+			ModuleID:  b.moduleSignature.String(),
+			Operation: operation,
+			Err:       err,
 		}
 	}
 	return b.configurationError

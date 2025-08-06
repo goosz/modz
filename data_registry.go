@@ -30,7 +30,7 @@ func (r *dataRegistry) Validate(key DataKey) error {
 	sig := key.signature()
 	if existing, exists := r.store[sig]; exists {
 		if existing != key {
-			return fmt.Errorf("data key signature clash: '%s' conflicts with existing key '%v'", sig, existing)
+			return fmt.Errorf("data key signature clash: '%s' conflicts with existing key '%s'", sig, existing)
 		}
 		// Same key, no error
 		return nil

@@ -132,7 +132,7 @@ func TestBinder_getData_assemblyError(t *testing.T) {
 	// Verify it's a ConfigurationError with proper context
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:test", configErr.ModuleID)
 	require.Equal(t, "getData", configErr.Operation)
 	require.Contains(t, configErr.Error(), "data key 'Data[int](github.com/goosz/modz:consumed#5)': no value found")
 }
@@ -227,7 +227,7 @@ func TestBinder_putData_assemblyError(t *testing.T) {
 	// Verify it's a ConfigurationError with proper context
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:test", configErr.ModuleID)
 	require.Equal(t, "putData", configErr.Operation)
 	require.Contains(t, configErr.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
 }
@@ -339,7 +339,7 @@ func TestBinder_configureModule_error(t *testing.T) {
 	// Verify it's a ConfigurationError with proper context
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "error", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:error", configErr.ModuleID)
 	require.Equal(t, "Configure", configErr.Operation)
 	require.Contains(t, configErr.Error(), "error")
 
@@ -368,7 +368,7 @@ func TestBinder_configureModule_declaredButNotProduced(t *testing.T) {
 	// Verify it's a ConfigurationError with proper context
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "mod", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:mod", configErr.ModuleID)
 	require.Equal(t, "Configure", configErr.Operation)
 	require.Contains(t, configErr.Error(), "module did not produce all declared keys")
 
@@ -422,20 +422,20 @@ func TestBinder_configureModule_errorSwallowing(t *testing.T) {
 	// Verify we get a ConfigurationError with proper context
 	var moduleErr *ConfigurationError
 	require.ErrorAs(t, err, &moduleErr)
-	require.Equal(t, "BadModule", moduleErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:BadModule", moduleErr.ModuleID)
 	require.Equal(t, "Install", moduleErr.Operation)
-	require.Contains(t, moduleErr.Error(), "module 'BadModule': already added")
+	require.Contains(t, moduleErr.Error(), "module 'github.com/goosz/modz:BadModule': already added")
 }
 
 func TestConfigurationError_Error_WithNilErr(t *testing.T) {
 	configErr := &ConfigurationError{
-		ModuleName: "TestModule",
-		Operation:  "TestOperation",
-		Err:        nil,
+		ModuleID:  "github.com/goosz/modz:test",
+		Operation: "TestOperation",
+		Err:       nil,
 	}
 
 	errorMsg := configErr.Error()
-	require.Contains(t, errorMsg, "TestModule")
+	require.Contains(t, errorMsg, "github.com/goosz/modz:test")
 	require.Contains(t, errorMsg, "TestOperation")
 	require.Contains(t, errorMsg, "failed")
 }
@@ -485,7 +485,7 @@ func TestBinder_failFastBehavior(t *testing.T) {
 	// Verify it's a ConfigurationError with the first error
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "test", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:test", configErr.ModuleID)
 	require.Equal(t, "putData", configErr.Operation)
 	require.Contains(t, configErr.Error(), "data key 'Data[string](github.com/goosz/modz:produced#4)': already set")
 

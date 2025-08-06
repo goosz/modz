@@ -10,6 +10,7 @@
 //
 //   - [Assembly]: Orchestrates the construction and wiring of modules and their dependencies.
 //   - [Module]: A self-contained component that declares what data it produces and consumes.
+//   - [Singleton]: A marker interface that allows modules to be installed multiple times without error.
 //   - [Data]: A type-safe key and contract for sharing values between modules.
 //   - [Binder]: A controlled interface for modules to access and provide data during configuration.
 //
@@ -24,6 +25,9 @@
 //     are only valid during this configuration phase; calling them outside this phase is strictly
 //     enforced and will result in an error.
 //
+// Modules can optionally embed [Singleton] to indicate they can be installed multiple times without
+// error. This is useful for modules that should be shared across multiple parts of an application.
+//
 // # Error Handling
 //
 // The framework provides robust error handling and validation during module configuration:
@@ -35,6 +39,15 @@
 //   - Missing declared dependencies are automatically detected and reported
 //   - Duplicate producers for the same data key are detected and reported during module installation
 //   - Data key signature clashes are detected and reported to prevent conflicts between packages
+//
+// # Module Uniqueness
+//
+// Module uniqueness is enforced through module signatures that combine package path and module name:
+//   - Each module's signature is derived from its package path and Name() method
+//   - Different packages can have modules with the same name without conflicts
+//   - Module signatures are used internally for tracking and error reporting
+//   - [Singleton] modules can be installed multiple times without error, while non-singleton modules
+//     will return an error on duplicate installation
 //
 // # Data Key Management
 //
