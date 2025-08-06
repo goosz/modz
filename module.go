@@ -1,5 +1,9 @@
 package modz
 
+import (
+	"reflect"
+)
+
 // Module represents a modular component within a Modz application.
 //
 // Each module declares what [Data] it produces and consumes, and provides a configuration
@@ -23,11 +27,13 @@ package modz
 // did not declare in Produces(), nor Get() from a [DataKey] it did not declare in
 // Consumes(). This ensures consistency between the module's discovery and configuration phases.
 type Module interface {
-	// Name returns the unique identifier for this module.
+	// Name returns the identifier for this module.
 	//
-	// The name should be descriptive and unique within the application to aid
-	// in debugging, logging, and dependency resolution. Module names are used
-	// by the [Assembly] for error reporting and dependency graph visualization.
+	// The name should be descriptive and unique within the module's package to aid
+	// in debugging, logging, and dependency resolution. Module names are combined
+	// with the package path to form a unique signature across all packages.
+	// This allows different packages to have modules with the same name without conflicts.
+	// Module signatures are used by the [Assembly] for error reporting and dependency graph visualization.
 	Name() string
 
 	// Produces returns the set of [DataKey]s that this module provides.
@@ -72,22 +78,35 @@ type Module interface {
 	Configure(Binder) error
 }
 
+// Singleton is a marker interface that can be embedded in modules to indicate
+// they will be silently ignored when installed multiple times. All modules
+// can only be installed once per assembly, but singleton modules won't
+// return an error on subsequent installation attempts.
+type Singleton struct{}
+
+// singleton is an unexported marker method that identifies singleton modules.
+func (s *Singleton) singleton() {
+	// Marker method - no implementation needed
+}
+
 // moduleSignature uniquely identifies a Module within an Assembly.
 //
 // It is used as a key in internal maps to track module bindings and ensure uniqueness.
-// The current implementation derives the signature from the Module's Name() method,
-// but this detail may evolve as the framework matures.
+// The signature derives from the Module's package and Name() method,
+// allowing different packages to have modules with the same name without conflicts.
 type moduleSignature struct {
-	name string
+	packageName string
+	name        string
 }
 
 func (sig moduleSignature) String() string {
-	return sig.name
+	return sig.packageName + ":" + sig.name
 }
 
 // newModuleSignature creates a new moduleSignature for the given Module.
 func newModuleSignature(m Module) moduleSignature {
 	return moduleSignature{
-		name: m.Name(),
+		packageName: reflect.TypeOf(m).Elem().PkgPath(),
+		name:        m.Name(),
 	}
 }

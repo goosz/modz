@@ -119,7 +119,16 @@ func (a *assembly) install(m Module, parent *binder) error {
 	sig := newModuleSignature(m)
 	a.mu.Lock()
 	defer a.mu.Unlock()
+
+	// Check if this module is already installed
 	if _, exists := a.bindings[sig]; exists {
+		// Check if this module is a singleton
+		_, singleton := m.(interface{ singleton() })
+		// If it's a singleton, silently ignore (no-op)
+		if singleton {
+			return nil
+		}
+		// If it's not a singleton, return an error
 		return newInstallError(sig.String(), "already added")
 	}
 	b := newBinder(a, m, parent, sig)

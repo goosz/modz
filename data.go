@@ -104,7 +104,7 @@ func (d *dataKey[T]) Get(r DataReader) (T, error) {
 	typedVal, ok := val.(T)
 	if !ok {
 		var zero T
-		return zero, fmt.Errorf("data key '%v': type assertion failed: expected %T, got %T", d, zero, val)
+		return zero, fmt.Errorf("data key '%s': type assertion failed: expected %T, got %T", d, zero, val)
 	}
 	return typedVal, nil
 }

@@ -28,3 +28,22 @@ func (m *MockModule) Configure(binder Binder) error {
 	}
 	return nil
 }
+
+// MockSingletonModule is a mock module with singleton behavior for testing.
+type MockSingletonModule struct {
+	NameValue     string
+	ProducesValue DataKeys
+	ConsumesValue DataKeys
+	ConfigureFunc func(Binder) error
+	Singleton
+}
+
+func (m *MockSingletonModule) Name() string       { return m.NameValue }
+func (m *MockSingletonModule) Produces() DataKeys { return m.ProducesValue }
+func (m *MockSingletonModule) Consumes() DataKeys { return m.ConsumesValue }
+func (m *MockSingletonModule) Configure(binder Binder) error {
+	if m.ConfigureFunc != nil {
+		return m.ConfigureFunc(binder)
+	}
+	return nil
+}

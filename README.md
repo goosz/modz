@@ -22,13 +22,16 @@ Modz enables you to compose applications from loosely-coupled modules that decla
 
 - **Assembly:** Orchestrates the construction and wiring of modules and their dependencies.
 - **Module:** A self-contained component that declares what data it produces and consumes.
+- **Singleton:** A marker interface that allows modules to be installed multiple times without error.
 - **Data:** A type-safe key and contract for sharing values between modules.
 - **Binder:** A controlled interface for modules to access and provide data during configuration.
 
 The framework includes robust validation to prevent configuration errors:
+- Module uniqueness enforcement using package path + module name signatures
 - Automatic detection of duplicate producers for the same data key
 - Data key signature clash detection to prevent conflicts between packages
 - Validation that data keys are properly declared at package level
+- Support for singleton modules that can be installed multiple times without error
 
 For a detailed API reference and technical documentation, see the [pkg.go.dev documentation](https://pkg.go.dev/github.com/goosz/modz).
 

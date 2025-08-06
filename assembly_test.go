@@ -107,7 +107,7 @@ func TestAssembly_Build_ConfigureError(t *testing.T) {
 	// Verify it's a ConfigurationError with proper context
 	var configErr *ConfigurationError
 	require.ErrorAs(t, err, &configErr)
-	require.Equal(t, "m1", configErr.ModuleName)
+	require.Equal(t, "github.com/goosz/modz:m1", configErr.ModuleID)
 	require.Equal(t, "Configure", configErr.Operation)
 	require.Contains(t, configErr.Error(), "configure failed")
 }
@@ -378,4 +378,97 @@ func TestAssembly_Install_RegistryValidationError_Consumes(t *testing.T) {
 	_, err := NewAssembly(m1, m2)
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "data key signature clash")
+}
+
+func TestAssembly_Singleton_DuplicateInstallation(t *testing.T) {
+	// Test that singleton modules can be installed multiple times without error
+	singleton1 := &MockSingletonModule{NameValue: "singleton"}
+	singleton2 := &MockSingletonModule{NameValue: "singleton"}
+
+	assembly, err := NewAssembly(singleton1)
+	require.NoError(t, err)
+
+	// Installing the same singleton module again should not error
+	err = assembly.Build()
+	require.NoError(t, err)
+
+	// Try to install the same singleton module through a binder
+	// This would normally fail for non-singleton modules
+	moduleWithBinder := &MockModule{
+		NameValue:     "test",
+		ProducesValue: Keys(),
+		ConsumesValue: Keys(),
+		ConfigureFunc: func(b Binder) error {
+			// This should succeed for singleton modules
+			return b.Install(singleton2)
+		},
+	}
+
+	assembly2, err := NewAssembly(moduleWithBinder)
+	require.NoError(t, err)
+
+	err = assembly2.Build()
+	require.NoError(t, err)
+}
+
+func TestAssembly_NonSingleton_DuplicateInstallation(t *testing.T) {
+	// Test that non-singleton modules still error on duplicate installation
+	module1 := &MockModule{NameValue: "non-singleton"}
+	module2 := &MockModule{NameValue: "non-singleton"}
+
+	// Installing the same non-singleton module again should error
+	moduleWithBinder := &MockModule{
+		NameValue:     "test",
+		ProducesValue: Keys(),
+		ConsumesValue: Keys(),
+		ConfigureFunc: func(b Binder) error {
+			// This should fail for non-singleton modules
+			return b.Install(module2)
+		},
+	}
+
+	assembly, err := NewAssembly(module1, moduleWithBinder)
+	require.NoError(t, err)
+
+	err = assembly.Build()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "module 'github.com/goosz/modz:non-singleton': already added")
+}
+
+func TestAssembly_Singleton_ModuleSignatureEquality(t *testing.T) {
+	// Test that module signatures work correctly for map keys
+	singleton1 := &MockSingletonModule{NameValue: "test"}
+	singleton2 := &MockSingletonModule{NameValue: "test"}
+	nonSingleton := &MockModule{NameValue: "test"}
+
+	sig1 := newModuleSignature(singleton1)
+	sig2 := newModuleSignature(singleton2)
+	sig3 := newModuleSignature(nonSingleton)
+
+	// Same name, both singletons - should be equal
+	require.Equal(t, sig1, sig2)
+
+	// Same name, different singleton status - should be equal (same package + name)
+	require.Equal(t, sig1, sig3)
+	require.Equal(t, sig2, sig3)
+}
+
+func TestAssembly_ModuleIdentity_TypeAndName(t *testing.T) {
+	// Test that different types of modules can have the same name
+	module1 := &MockModule{NameValue: "database"}
+	module2 := &MockSingletonModule{NameValue: "database"}
+
+	sig1 := newModuleSignature(module1)
+	sig2 := newModuleSignature(module2)
+
+	// Different types with same name in same package should be the same signature
+	require.Equal(t, sig1, sig2)
+	require.Equal(t, "github.com/goosz/modz:database", sig1.String())
+	require.Equal(t, "github.com/goosz/modz:database", sig2.String())
+
+	// Since they're the same signature, but one is a singleton, both should be installable
+	assembly, err := NewAssembly(module1, module2)
+	require.NoError(t, err)
+	err = assembly.Build()
+	require.NoError(t, err)
 }
